@@ -69,4 +69,14 @@ export const en = {
     walkSummary: (distKm: number, steps: number) =>
       `${distKm.toFixed(2)} km · ${steps.toLocaleString()} steps`,
   },
+
+  // AR screen
+  ar: {
+    enterAR: 'Enter AR',
+    exitAR: 'Exit AR',
+    arPaused: 'AR paused',
+    tapToResume: 'Tap to resume',
+    deviceWarm: 'Device getting warm',
+    planeDetecting: 'Point camera at a flat surface…',
+  },
 } as const;

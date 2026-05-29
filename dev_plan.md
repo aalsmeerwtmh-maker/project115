@@ -821,7 +821,7 @@ Each phase delivers a demoable, stable increment. Phases are ordered to put **da
 
 Already covered in Part 1. Custom dev clients on both platforms, schema in place, dependencies installed, four-tab skeleton renders. New Architecture enabled; Viro AGP conflict patched via `patch-package`.
 
-### 🔲 Phase 1 — Core Data Layer
+### ✅ Phase 1 — Core Data Layer
 
 Goal: convert real steps into in-DB growth, deterministically.
 

@@ -59,3 +59,67 @@ export async function getRecentWalkSessions(limit = 5): Promise<Event[]> {
     .orderBy(desc(events.triggeredAt))
     .limit(limit);
 }
+
+// ---------------------------------------------------------------------------
+// Boss events
+// ---------------------------------------------------------------------------
+
+export type BossPayload = {
+  bossId: string;
+  won: boolean;
+  tokensEarned: number;
+  retryUntil?: number; // unix ms; present on loss rows
+  petSnapshot: {
+    stamina: number;
+    growthValue: number;
+    stage: string;
+    streakDays: number;
+  };
+};
+
+export async function getBossEvents(): Promise<Event[]> {
+  return db.select().from(events).where(eq(events.type, 'boss')).orderBy(desc(events.triggeredAt));
+}
+
+export async function insertBossEvent(
+  id: string,
+  payload: BossPayload,
+  won: boolean,
+): Promise<void> {
+  const row: NewEvent = {
+    id,
+    type: 'boss',
+    triggeredAt: Date.now(),
+    latitude: null,
+    longitude: null,
+    payload: JSON.stringify(payload),
+    resolved: won,
+  };
+  await db.insert(events).values(row);
+}
+
+// ---------------------------------------------------------------------------
+// Story events
+// ---------------------------------------------------------------------------
+
+export type StoryPayload = {
+  bossId: string;
+  dialogueLine: string;
+};
+
+export async function insertStoryEvent(id: string, payload: StoryPayload): Promise<void> {
+  const row: NewEvent = {
+    id,
+    type: 'story',
+    triggeredAt: Date.now(),
+    latitude: null,
+    longitude: null,
+    payload: JSON.stringify(payload),
+    resolved: false,
+  };
+  await db.insert(events).values(row);
+}
+
+export async function resolveEvent(id: string): Promise<void> {
+  await db.update(events).set({ resolved: true }).where(eq(events.id, id));
+}

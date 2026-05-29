@@ -1,0 +1,14 @@
+diff --git a/node_modules/@reactvision/react-viro/dist/plugins/withViroAndroid.js b/node_modules/@reactvision/react-viro/dist/plugins/withViroAndroid.js
+index 9af98f9..91b50c6 100644
+--- a/node_modules/@reactvision/react-viro/dist/plugins/withViroAndroid.js
++++ b/node_modules/@reactvision/react-viro/dist/plugins/withViroAndroid.js
+@@ -112,7 +112,8 @@ const withViroProjectBuildGradle = (config) => (0, config_plugins_1.withProjectB
+     //  newConfig.modResults.contents +=
+     //    "\n// ViroReact requires New Architecture\nnewArchEnabled=true\n";
+     //}
+-    newConfig.modResults.contents = newConfig.modResults.contents.replace(/classpath\("com.android.tools.build:gradle.*/, `classpath('com.android.tools.build:gradle:4.1.1')`);
++    // PATCHED: AGP downgrade to 4.1.1 removed — incompatible with Expo 56 / AGP 8.x
++    // newConfig.modResults.contents = newConfig.modResults.contents.replace(/classpath\("com.android.tools.build:gradle.*/, `classpath('com.android.tools.build:gradle:4.1.1')`);
+     return newConfig;
+ });
+ const withViroAppBuildGradle = (config) => (0, config_plugins_1.withAppBuildGradle)(config, async (config) => {

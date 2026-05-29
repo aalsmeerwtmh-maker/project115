@@ -1,0 +1,49 @@
+# Node / Expo
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native build outputs (we rely on EAS; locally-generated ios/ and android/ should not be committed)
+ios/
+android/
+*.ipa
+*.apk
+*.aab
+
+# Metro
+.metro-health-check*
+
+# Env
+.env
+.env.*.local
+
+# Logs / debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Claude Code
+.claude/
+
+# Native signing artifacts
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.pem
+*.orig.*
+.kotlin/
+
+# TypeScript
+*.tsbuildinfo

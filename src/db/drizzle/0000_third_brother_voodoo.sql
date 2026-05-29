@@ -1,0 +1,52 @@
+CREATE TABLE `equipment` (
+	`id` text PRIMARY KEY NOT NULL,
+	`catalog_id` text NOT NULL,
+	`pet_id` text,
+	`acquired_at` integer NOT NULL,
+	`source` text NOT NULL,
+	`updated_at` integer NOT NULL,
+	FOREIGN KEY (`pet_id`) REFERENCES `pets`(`id`) ON UPDATE no action ON DELETE set null
+);
+--> statement-breakpoint
+CREATE INDEX `idx_equipment_pet` ON `equipment` (`pet_id`);--> statement-breakpoint
+CREATE TABLE `events` (
+	`id` text PRIMARY KEY NOT NULL,
+	`type` text NOT NULL,
+	`triggered_at` integer NOT NULL,
+	`latitude` real,
+	`longitude` real,
+	`payload` text NOT NULL,
+	`resolved` integer DEFAULT false NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX `idx_events_type_time` ON `events` (`type`,`triggered_at`);--> statement-breakpoint
+CREATE TABLE `pets` (
+	`id` text PRIMARY KEY NOT NULL,
+	`name` text NOT NULL,
+	`species` text NOT NULL,
+	`stage` text DEFAULT 'baby' NOT NULL,
+	`stamina` integer DEFAULT 50 NOT NULL,
+	`affection` integer DEFAULT 0 NOT NULL,
+	`growth_value` integer DEFAULT 0 NOT NULL,
+	`mood` text DEFAULT 'normal' NOT NULL,
+	`is_active` integer DEFAULT false NOT NULL,
+	`created_at` integer NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `progress` (
+	`key` text PRIMARY KEY NOT NULL,
+	`value` text NOT NULL,
+	`updated_at` integer NOT NULL
+);
+--> statement-breakpoint
+CREATE TABLE `steps` (
+	`date` text PRIMARY KEY NOT NULL,
+	`step_count` integer DEFAULT 0 NOT NULL,
+	`distance_m` real DEFAULT 0 NOT NULL,
+	`calories` real DEFAULT 0 NOT NULL,
+	`food_earned` integer DEFAULT 0 NOT NULL,
+	`goal` integer DEFAULT 8000 NOT NULL,
+	`goal_reached_at` integer,
+	`updated_at` integer NOT NULL
+);

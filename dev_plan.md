@@ -855,7 +855,7 @@ Goal: walks are tracked, drawn on a map, and feed back into pet progress.
 
 **Why now:** GPS adds the second input stream (steps + location). It also exercises background execution — important to shake out before adding AR.
 
-### 🔲 Phase 4 — AR Integration
+### ✅ Phase 4 — AR Integration
 
 Goal: during a walk, user can pop the phone into AR and see their pet on the ground in front of them.
 
@@ -868,15 +868,291 @@ Goal: during a walk, user can pop the phone into AR and see their pet on the gro
 
 ### 🔲 Phase 5 — Game Systems
 
-Goal: the game loop is closed — exercise produces rewards, rewards buy things, things make the next exercise session more interesting.
+Goal: the game loop is closed — exercise produces rewards, rewards buy things, things make the next exercise session more rewarding.
 
-- Boss battle screen: turn-based or timed challenges keyed to consecutive-day step thresholds (e.g., "walk 8,000 steps for 7 consecutive days to unlock Boss 1").
-- Token economy: tokens earned from time-in-app + completed bosses + streak bonuses, spent in the equipment shop.
-- Equipment shop: catalog of cosmetic items, currency = tokens or IAP. Equip/unequip writes to the `equipment` table.
-- Story event hooks: trigger pet-perspective dialogue snippets from `events.payload` JSON.
-- IAP integration via `react-native-iap`: a small set of token bundles and one cosmetic bundle. Implement receipt validation client-side (server-side validation deferred until a backend exists).
+**Delivery order within Phase 5:** 5.1 (config) → 5.2 (tokens pure) → 5.3 (bosses pure) → 5.4 (equipment repo) → 5.5 (IAP service) → 5.6 (boss screen) → 5.7 (shop screen) → 5.8 (navigation wiring) → 5.9 (geofence token fix) → 5.10 (story events).
 
-**Why this late:** these systems all _consume_ the data + UI + map + AR plumbing built earlier. Building them first would mean rewriting them once the underlying systems landed.
+**Why this late:** all five systems — config, tokens, bosses, equipment, IAP — depend on the data model (Phase 1), the pet stat system (Phase 2), the token-awarding walk hook (Phase 3), and the event table pattern (Phase 3). Building them first would mean rewriting them once the underlying systems landed.
+
+---
+
+#### 5.1 — `src/game/config.ts` — Central Balance File
+
+All numbers that govern gameplay difficulty, reward rates, and shop prices live in a single exported `GAME_CONFIG` object. No other file may hard-code a magic number that affects token flow, boss difficulty, or item costs. This is the only file that needs to change during balance tuning.
+
+**Design rationale for numbers:**
+- Target lifecycle: 90 days, 8,000 steps/day average.
+- At 8,000 steps/day with daily goal hit: `growthValue ≈ 1.10/day` (from existing `growthFormula.ts`).
+- Stage boundaries: child at growth 25 (~day 23), adult at 50 (~day 46), elder at 75 (~day 68).
+- Active player token accumulation over 90 days: ~780 (check-ins) + ~130 (streak bonuses) + ~505 (all four boss rewards) ≈ 1,415 total. Shop catalog priced so an engaged player can collect ~80% of the catalog without IAP.
+
+**Interface definition:**
+
+```typescript
+export interface BossDefinition {
+  id: string;
+  name: string;
+  description: string;
+  requiredStreakDays: number;
+  requiredGrowthValue: number;
+  requiredStage: 'baby' | 'child' | 'adult' | 'elder';
+  requiredStamina: number;
+  tokenReward: number;
+  dialogues: string[];
+}
+
+export interface EquipmentItem {
+  id: string;
+  name: string;
+  category: 'hat' | 'accessory' | 'background';
+  tokenCost: number;
+  iapProductId: string | null;
+  assetKey: string;
+}
+
+export interface IapBundle {
+  productId: string;
+  tokenAmount: number;
+  displayPrice: string;
+}
+
+export interface TokenEarnRates {
+  checkinPerCell: number;
+  streakMilestoneEveryNDays: number;
+  streakMilestoneBonus: number;
+}
+
+export interface GameConfig {
+  bosses: BossDefinition[];
+  equipment: EquipmentItem[];
+  iapBundles: IapBundle[];
+  tokenEarnRates: TokenEarnRates;
+}
+```
+
+**Token earn rates:**
+
+| Field | Value |
+|---|---|
+| `checkinPerCell` | `5` |
+| `streakMilestoneEveryNDays` | `7` |
+| `streakMilestoneBonus` | `10` |
+
+**Bosses:**
+
+| id | name | requiredStreakDays | requiredGrowthValue | requiredStage | requiredStamina | tokenReward |
+|---|---|---|---|---|---|---|
+| `boss_mudpaw` | Mudpaw the Rascal | 3 | 5 | `baby` | 55 | 30 |
+| `boss_thornback` | Thornback Rex | 7 | 25 | `child` | 65 | 75 |
+| `boss_ironmaw` | Ironmaw the Titan | 14 | 50 | `adult` | 75 | 150 |
+| `boss_shadowhowl` | Shadowhowl Prime | 21 | 75 | `elder` | 90 | 250 |
+
+Each boss has 3 win dialogue strings (pet-perspective, shown in a modal after victory) stored under its `dialogues` array in `config.ts`.
+
+**Equipment catalog (7 items):**
+
+| id | name | category | tokenCost | iapProductId |
+|---|---|---|---|---|
+| `hat_beanie` | Cozy Beanie | `hat` | 50 | `null` |
+| `hat_crown` | Tiny Crown | `hat` | 120 | `null` |
+| `hat_tophat` | Dapper Top Hat | `hat` | 200 | `pawstep.item.tophat` |
+| `acc_bowtie` | Fancy Bow-Tie | `accessory` | 75 | `null` |
+| `acc_scarf` | Winter Scarf | `accessory` | 100 | `null` |
+| `bg_forest` | Enchanted Forest | `background` | 150 | `null` |
+| `bg_citynight` | City at Night | `background` | 400 | `pawstep.item.citynight` |
+
+**IAP token bundles:**
+
+| productId | tokenAmount | displayPrice |
+|---|---|---|
+| `pawstep.tokens.small` | 100 | `$0.99` |
+| `pawstep.tokens.medium` | 300 | `$2.49` |
+| `pawstep.tokens.large` | 700 | `$4.99` |
+
+Implementation steps:
+1. Create `src/game/config.ts` with `GAME_CONFIG` containing all values above.
+2. Export as named export: `export const GAME_CONFIG: GameConfig = { ... }`.
+3. Add `// DO NOT hardcode game-balance numbers outside this file.` banner at the top.
+
+---
+
+#### 5.2 — `src/game/tokens.ts` — Pure Token Functions
+
+Pure functions only. All constants read from `GAME_CONFIG`.
+
+```typescript
+export function calcStreakBonus(): number
+export function isStreakMilestone(consecutiveDays: number): boolean
+export function calcBossReward(bossId: string): number
+export function checkinTokenAmount(): number
+```
+
+Implementation steps:
+1. Write the four functions importing from `@/game/config`.
+2. Add unit tests in `src/game/__tests__/tokens.test.ts`: verify `calcBossReward('boss_mudpaw')` returns 30, `isStreakMilestone(7)` is true, `isStreakMilestone(6)` is false, `isStreakMilestone(14)` is true.
+
+---
+
+#### 5.3 — `src/game/bosses.ts` — Pure Boss Logic
+
+Pure functions; pet stats passed in, no store imports.
+
+```typescript
+export function getAllBosses(): BossDefinition[]
+export function getAvailableBosses(pet: Pet): BossDefinition[]
+export function canChallengeBoss(boss: BossDefinition, pet: Pet, streakDays: number): boolean
+export function attemptBoss(boss: BossDefinition, pet: Pet, streakDays: number): { won: boolean; tokensEarned: number; dialogueLine: string }
+```
+
+**Mechanic — stat-check:** `canChallengeBoss` returns true only when all four requirements are met simultaneously (streak days, growth value, stamina, stage). `attemptBoss` is deterministic given the same inputs — no RNG on the win/lose outcome, only on which dialogue line is shown.
+
+Implementation steps:
+1. Write `src/game/bosses.ts`.
+2. Add unit tests in `src/game/__tests__/bosses.test.ts`:
+   - `getAvailableBosses` with baby-stage pet returns only `boss_mudpaw`.
+   - `canChallengeBoss` for `boss_mudpaw` returns false when stamina is 50.
+   - `attemptBoss` returns `won: false, tokensEarned: 0` when requirements not met.
+   - `attemptBoss` returns `won: true, tokensEarned: 30` with qualifying stats.
+
+---
+
+#### 5.4 — `src/db/repositories/equipment.ts` — Equipment Repository
+
+Implement the stub. All functions async, use Drizzle, return typed rows.
+
+```typescript
+export async function getOwnedEquipment(): Promise<Equipment[]>
+export async function getEquippedItems(petId: string): Promise<Equipment[]>
+export async function getInventory(): Promise<Equipment[]>
+export async function purchaseEquipment(catalogId: string, source: 'token' | 'iap' | 'reward', id: string): Promise<Equipment>
+export async function equipItem(equipmentId: string, petId: string): Promise<void>
+export async function unequipItem(equipmentId: string): Promise<void>
+export async function ownsItem(catalogId: string): Promise<boolean>
+```
+
+No migration needed — `equipment` table already exists.
+
+---
+
+#### 5.5 — `src/services/iap.ts` — IAP Service
+
+`react-native-iap` v15 (NitroModules/JSI). Isolated — nothing else imports from `react-native-iap` directly.
+
+```typescript
+export async function initIAP(): Promise<void>
+export async function teardownIAP(): Promise<void>
+export async function fetchProducts(): Promise<Product[]>
+export async function purchaseTokenBundle(productId: string): Promise<void>
+export function setupPurchaseListeners(): () => void   // returns cleanup fn
+export async function restorePurchases(): Promise<void>
+```
+
+- `setupPurchaseListeners` wires `purchaseUpdatedListener` → credits tokens via `progressStore.addTokens` → calls `finishTransaction`.
+- Call `initIAP()` + `setupPurchaseListeners()` once from `App.tsx` on mount; call `teardownIAP()` + cleanup on unmount.
+- Receipt validation is client-side only; server-side deferred to Phase 7+.
+
+---
+
+#### 5.6 — `src/screens/boss/BossScreen.tsx` — Boss List + Challenge Flow
+
+```
+src/screens/boss/
+  BossScreen.tsx
+  components/
+    BossCard.tsx          — requirements table, challenge button
+    BossResultModal.tsx   — win/lose modal with story dialogue
+```
+
+Data flow:
+1. Read `activePet` from `petStore`, `streakCurrent` from `progressStore`.
+2. Query `getBossEvents()` from `events` repository → build `Set<string>` of defeated boss IDs (resolved = true rows).
+3. Render `FlatList` of `BossCard` components from `getAvailableBosses(activePet)`.
+4. Each card shows per-requirement green check / red cross and a "Challenge" button (disabled if `!canChallengeBoss` or already defeated).
+5. On challenge: call `attemptBoss` → if won, `addTokens`, insert boss + story event rows → show `BossResultModal`.
+
+Boss event payload type stored in `events.payload`:
+```typescript
+type BossPayload = { bossId: string; won: boolean; tokensEarned: number; petSnapshot: { stamina: number; growthValue: number; stage: string; streakDays: number } }
+```
+`resolved = true` for a win; `resolved = false` for a loss. A boss is "already defeated" when a resolved event with matching `bossId` exists.
+
+Add helpers to `src/db/repositories/events.ts`:
+- `getBossEvents(): Promise<Event[]>`
+- `insertBossEvent(id, payload, won): Promise<void>`
+
+---
+
+#### 5.7 — `src/screens/shop/ShopScreen.tsx` — Equipment Shop + IAP
+
+```
+src/screens/shop/
+  ShopScreen.tsx
+  components/
+    TokenBalanceBadge.tsx
+    ShopItemCard.tsx      — owned/equip/buy states
+    IapBundleRow.tsx      — token bundle purchase row
+```
+
+Data flow:
+1. Read `tokens` from `progressStore`, call `getOwnedEquipment()`, call `fetchProducts()` for live prices.
+2. Render two sections: "Earn More Tokens" (IAP bundles) and "Equipment Shop" (catalog grid).
+3. Buy flow (token): guard `tokens >= cost && !ownsItem`, call `spendTokens`, call `purchaseEquipment`, refresh list.
+4. Equip/unequip: call `equipItem` / `unequipItem`, update `petStore`.
+
+Add `spendTokens(amount: number)` action to `progressStore` (throws if insufficient balance).
+
+---
+
+#### 5.8 — Navigation Wiring
+
+Add to `RootStackParamList` in `src/navigation/types.ts`:
+```typescript
+Boss: undefined;
+Shop: undefined;
+```
+
+Register both screens in `RootNavigator.tsx`. Add navigation triggers:
+- `HomeScreen` → "Shop" icon button (top-right).
+- `GoalsScreen` → "Boss Challenges" `PrimaryButton` at bottom of streak card.
+
+---
+
+#### 5.9 — Geofence Token Rate Fix
+
+Replace the hardcoded `CHECKIN_TOKENS = 5` in `src/hooks/useWalkSession.ts` with `checkinTokenAmount()` from `@/game/tokens`. This makes geofence rewards configurable from `config.ts`.
+
+---
+
+#### 5.10 — Story Event Hooks
+
+On a successful boss defeat, after inserting the `boss` event row, insert a `story` event row:
+```typescript
+type StoryPayload = { bossId: string; dialogueLine: string }
+```
+`resolved = false` on insert; set `resolved = true` when the player dismisses the result modal.
+
+Add to `src/db/repositories/events.ts`:
+- `insertStoryEvent(id, payload): Promise<void>`
+- `resolveEvent(id): Promise<void>`
+
+The two-row pattern keeps the permanent win record (`boss`) separate from the transient dialogue notification (`story`), allowing future phases to query unread story events.
+
+---
+
+#### Phase 5 Verification Checklist
+
+- [ ] `npm run typecheck` clean.
+- [ ] `npm run lint` clean.
+- [ ] `src/game/__tests__/tokens.test.ts` passes in plain Node.
+- [ ] `src/game/__tests__/bosses.test.ts` passes in plain Node.
+- [ ] Change `GAME_CONFIG.tokenEarnRates.checkinPerCell` to 99 → walk session awards 99 tokens per cell → revert. Zero magic numbers outside `config.ts`.
+- [ ] Challenging `boss_mudpaw` with qualifying stats awards 30 tokens and inserts `boss` + `story` event rows.
+- [ ] Challenging `boss_mudpaw` a second time shows "Defeated" badge; Challenge button disabled.
+- [ ] Buying `hat_beanie` (50 tokens) deducts balance, adds equipment row (`source = 'token'`), card switches to "Equip".
+- [ ] Equipping `hat_beanie` writes `petId` to the equipment row.
+- [ ] IAP token bundle purchase credits correct token amount on sandbox success.
+- [ ] `BossScreen` and `ShopScreen` reachable from navigation without crash.
+- [ ] No business logic inside any JSX `return` statement.
 
 ### 🔲 Phase 6 — Polish
 

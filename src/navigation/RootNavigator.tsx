@@ -3,6 +3,8 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { BottomTabs } from './BottomTabs';
 import { OnboardingScreen } from '@/screens/onboarding/OnboardingScreen';
 import { ARWalkScreen } from '@/screens/walks/ARWalkScreen';
+import { BossScreen } from '@/screens/boss/BossScreen';
+import { ShopScreen } from '@/screens/shop/ShopScreen';
 import type { RootStackParamList } from './types';
 
 // The root navigator is a native stack that sits above the tab bar.
@@ -28,6 +30,8 @@ export function RootNavigator() {
           component={ARWalkScreen}
           options={{ presentation: 'fullScreenModal' }}
         />
+        <Stack.Screen name="Boss" component={BossScreen} />
+        <Stack.Screen name="Shop" component={ShopScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

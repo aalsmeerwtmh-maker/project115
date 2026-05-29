@@ -1,14 +1,20 @@
 import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { useProgressStore } from '@/stores/progressStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { getStepDaysFrom } from '@/db/repositories/steps';
 import type { StepDay } from '@/db/schema';
+import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { en } from '@/i18n/en';
+
+type GoalsNav = NativeStackNavigationProp<RootStackParamList>;
 
 // Returns 'YYYY-MM-DD' for a date that is `offsetDays` before today (0 = today).
 function dateOffset(offsetDays: number): string {
@@ -33,6 +39,7 @@ function nextMilestone(dailyGoal: number): number {
 }
 
 export function GoalsScreen() {
+  const navigation = useNavigation<GoalsNav>();
   const streakCurrent = useProgressStore((s) => s.streakCurrent);
   const dailyGoal = useSettingsStore((s) => s.dailyGoal);
   const [weekDays, setWeekDays] = useState<StepDay[]>([]);
@@ -81,6 +88,10 @@ export function GoalsScreen() {
           <View style={styles.streakRow}>
             <Text style={styles.streakEmoji}>🔥</Text>
             <Text style={styles.streakText}>{en.goals.currentStreak(streakCurrent)}</Text>
+          </View>
+
+          <View style={styles.bossButtonWrapper}>
+            <PrimaryButton label={en.boss.title} onPress={() => navigation.navigate('Boss')} />
           </View>
         </View>
 
@@ -174,6 +185,9 @@ const styles = StyleSheet.create({
   streakRow: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  bossButtonWrapper: {
+    marginTop: spacing.md,
   },
   streakEmoji: {
     fontSize: 22,

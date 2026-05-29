@@ -3,8 +3,7 @@ import { useLocation, type Coords } from '@/hooks/useLocation';
 import { useProgressStore } from '@/stores/progressStore';
 import { insertExplorationEvent, insertCheckinEvent } from '@/db/repositories/events';
 import { generateId } from '@/utils/id';
-
-const CHECKIN_TOKENS = 5;
+import { checkinTokenAmount, timeInAppTokenAmount, TIME_IN_APP_DAILY_CAP } from '@/game/tokens';
 
 function haversineM(a: Coords, b: Coords): number {
   const R = 6_371_000;
@@ -59,6 +58,7 @@ export interface UseWalkSessionReturn {
 export function useWalkSession(): UseWalkSessionReturn {
   const { startTracking, stopTracking, permissionStatus } = useLocation();
   const addTokens = useProgressStore((s) => s.addTokens);
+  const timeInAppTokensToday = useProgressStore((s) => s.timeInAppTokensToday);
 
   const [isActive, setIsActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -71,6 +71,14 @@ export function useWalkSession(): UseWalkSessionReturn {
   const stepBaselineRef = useRef<number>(0);
   const visitedCellsRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const minuteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Keep a ref to the current daily token count so the minute timer callback
+  // always sees the up-to-date value without needing it in the dependency array.
+  const timeInAppTodayRef = useRef<number>(timeInAppTokensToday);
+  useEffect(() => {
+    timeInAppTodayRef.current = timeInAppTokensToday;
+  }, [timeInAppTokensToday]);
 
   const handleNewCoords = useCallback(
     async (coords: Coords) => {
@@ -81,12 +89,13 @@ export function useWalkSession(): UseWalkSessionReturn {
       const key = cellKey(coords);
       if (!visitedCellsRef.current.has(key)) {
         visitedCellsRef.current.add(key);
+        const checkinTokens = checkinTokenAmount();
         const id = generateId();
         await insertCheckinEvent(id, coords.lat, coords.lng, {
           cellKey: key,
-          tokensAwarded: CHECKIN_TOKENS,
+          tokensAwarded: checkinTokens,
         });
-        await addTokens(CHECKIN_TOKENS);
+        await addTokens(checkinTokens);
       }
     },
     [addTokens],
@@ -109,9 +118,25 @@ export function useWalkSession(): UseWalkSessionReturn {
         setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
 
+      // Award 1 token per minute of active walk session, capped at TIME_IN_APP_DAILY_CAP.
+      minuteTimerRef.current = setInterval(() => {
+        if (timeInAppTodayRef.current < TIME_IN_APP_DAILY_CAP) {
+          const amount = timeInAppTokenAmount();
+          timeInAppTodayRef.current += amount;
+          // Fire-and-forget: addTokens also persists timeInAppTokensToday via store
+          addTokens(amount).catch((err) => {
+            console.warn('[useWalkSession] time-in-app token award failed:', err);
+          });
+          // Update the persisted daily total through the store
+          useProgressStore.setState((prev) => ({
+            timeInAppTokensToday: prev.timeInAppTokensToday + amount,
+          }));
+        }
+      }, 60_000);
+
       await startTracking(handleNewCoords);
     },
-    [startTracking, handleNewCoords],
+    [startTracking, handleNewCoords, addTokens],
   );
 
   const stop = useCallback(
@@ -121,6 +146,11 @@ export function useWalkSession(): UseWalkSessionReturn {
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
+      }
+
+      if (minuteTimerRef.current) {
+        clearInterval(minuteTimerRef.current);
+        minuteTimerRef.current = null;
       }
 
       const poly = polylineRef.current;
@@ -156,6 +186,7 @@ export function useWalkSession(): UseWalkSessionReturn {
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
+      if (minuteTimerRef.current) clearInterval(minuteTimerRef.current);
     };
   }, []);
 

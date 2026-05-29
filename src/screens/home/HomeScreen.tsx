@@ -1,5 +1,8 @@
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '@/navigation/types';
 import { usePetStore } from '@/stores/petStore';
 import { useStepStore } from '@/stores/stepStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -11,7 +14,10 @@ import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { en } from '@/i18n/en';
 
+type HomeNav = NativeStackNavigationProp<RootStackParamList>;
+
 export function HomeScreen() {
+  const navigation = useNavigation<HomeNav>();
   const activePet = usePetStore((s) => s.activePet);
   const today = useStepStore((s) => s.today);
   const { isAvailable } = useStepCounter();
@@ -27,7 +33,16 @@ export function HomeScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.heading}>PawStep</Text>
+        <View style={styles.topRow}>
+          <Text style={styles.heading}>PawStep</Text>
+          <TouchableOpacity
+            style={styles.shopButton}
+            onPress={() => navigation.navigate('Shop')}
+            accessibilityLabel="Open Shop"
+          >
+            <Text style={styles.shopButtonText}>🛍</Text>
+          </TouchableOpacity>
+        </View>
 
         {activePet ? (
           <View style={styles.petSection}>
@@ -77,11 +92,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xxl,
   },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: spacing.lg,
+    marginBottom: spacing.md,
+  },
   heading: {
     ...typography.heading1,
     color: colors.primary,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+  },
+  shopButton: {
+    padding: spacing.sm,
+  },
+  shopButtonText: {
+    fontSize: 24,
   },
   petSection: {
     alignItems: 'center',

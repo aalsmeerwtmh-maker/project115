@@ -7,6 +7,8 @@ export type RootStackParamList = {
   Onboarding: undefined;
   Main: undefined;
   ARWalk: { sessionId: string }; // links the AR session back to a walk record in the DB
+  Boss: undefined;
+  Shop: undefined;
 };
 
 // The four bottom tabs.

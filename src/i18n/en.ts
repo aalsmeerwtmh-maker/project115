@@ -70,6 +70,44 @@ export const en = {
       `${distKm.toFixed(2)} km · ${steps.toLocaleString()} steps`,
   },
 
+  // Boss screen
+  boss: {
+    title: 'Boss Challenges',
+    challengeButton: 'Challenge',
+    defeatedBadge: 'Defeated',
+    retryCountdown: (h: number, m: number) => `Try again in ${h}h ${m}m`,
+    requirementsMet: 'Ready',
+    requirementsNotMet: 'Not ready',
+    reqStreak: (n: number) => `${n}-day streak`,
+    reqGrowth: (n: number) => `Growth ${n}`,
+    reqStage: (s: string) => `Stage: ${s.charAt(0).toUpperCase() + s.slice(1)}`,
+    reqStamina: (n: number) => `Stamina ${n}`,
+    winTitle: 'Victory!',
+    lossTitle: 'Not quite...',
+    lossMessage: 'Keep training and try again.',
+    tokensEarned: (n: number) => `+${n} tokens`,
+    closeButton: 'Close',
+  },
+
+  // Shop screen
+  shop: {
+    title: 'Shop',
+    tokenBalance: (n: number) => `${n} tokens`,
+    earnSection: 'Earn More Tokens',
+    equipmentSection: 'Equipment',
+    buyButton: 'Buy',
+    equipButton: 'Equip',
+    unequipButton: 'Unequip',
+    ownedBadge: 'Owned',
+    equippedBadge: 'Equipped',
+    insufficientTokens: 'Not enough tokens',
+    restorePurchases: 'Restore Purchases',
+    iapBuyButton: 'Buy',
+    categoryHat: 'Hats',
+    categoryAccessory: 'Accessories',
+    categoryBackground: 'Backgrounds',
+  },
+
   // AR screen
   ar: {
     enterAR: 'Enter AR',

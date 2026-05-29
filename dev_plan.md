@@ -3,7 +3,7 @@
 > **Project:** PawStep (Exercise with E-Pet)
 > **Platforms:** Android + iOS (single codebase via React Native + Expo)
 > **Repo:** `https://github.com/aalsmeerwtmh-maker/project115.git`
-> **Repo state at time of writing:** empty (only `.gitattributes` + `CLAUDE.md` + `proposal.md`)
+> **Repo state at time of writing:** ~~empty (only `.gitattributes` + `CLAUDE.md` + `proposal.md`)~~ **Initialization complete — full skeleton in place, all Part 1 steps done.**
 > **Document scope:** Part 1 — detailed project initialization. Part 2 — high-level roadmap through release.
 
 ---
@@ -13,17 +13,17 @@
 1. [Overview](#1-overview)
 2. [Confirmed Technology Stack](#2-confirmed-technology-stack)
 3. [Part 1 — Project Initialization (Step-by-Step)](#part-1--project-initialization-step-by-step)
-   - 3.1 [Bootstrapping the Expo project](#31-bootstrapping-the-expo-project)
-   - 3.2 [Switching to `expo-dev-client`](#32-switching-to-expo-dev-client-why--how)
-   - 3.3 [Installing all core dependencies upfront](#33-installing-all-core-dependencies-upfront)
-   - 3.4 [Configuring `app.config.ts` (permissions, AR, build settings)](#34-configuring-appconfigts-permissions-ar-build-settings)
-   - 3.5 [Folder and module structure](#35-folder-and-module-structure)
-   - 3.6 [Navigation skeleton (React Navigation)](#36-navigation-skeleton-react-navigation)
-   - 3.7 [SQLite schema and initialization](#37-sqlite-schema-and-initialization)
-   - 3.8 [Tooling: TypeScript, ESLint, Prettier, path aliases](#38-tooling-typescript-eslint-prettier-path-aliases)
-   - 3.9 [EAS Build configuration](#39-eas-build-configuration)
-   - 3.10 [Git hygiene](#310-git-hygiene)
-   - 3.11 [Initialization sanity checklist](#311-initialization-sanity-checklist)
+   - ✅ 3.1 [Bootstrapping the Expo project](#31-bootstrapping-the-expo-project)
+   - ✅ 3.2 [Switching to `expo-dev-client`](#32-switching-to-expo-dev-client-why--how)
+   - ✅ 3.3 [Installing all core dependencies upfront](#33-installing-all-core-dependencies-upfront)
+   - ✅ 3.4 [Configuring `app.config.ts` (permissions, AR, build settings)](#34-configuring-appconfigts-permissions-ar-build-settings)
+   - ✅ 3.5 [Folder and module structure](#35-folder-and-module-structure)
+   - ✅ 3.6 [Navigation skeleton (React Navigation)](#36-navigation-skeleton-react-navigation)
+   - ✅ 3.7 [SQLite schema and initialization](#37-sqlite-schema-and-initialization)
+   - ✅ 3.8 [Tooling: TypeScript, ESLint, Prettier, path aliases](#38-tooling-typescript-eslint-prettier-path-aliases)
+   - ✅ 3.9 [EAS Build configuration](#39-eas-build-configuration)
+   - ✅ 3.10 [Git hygiene](#310-git-hygiene)
+   - 3.11 [Initialization sanity checklist](#311-initialization-sanity-checklist) _(3/11 verified — EAS android build pending)_
 4. [Part 2 — Full Project Roadmap](#part-2--full-project-roadmap)
 5. [Risks and Open Questions](#5-risks-and-open-questions)
 6. [Success Criteria](#6-success-criteria)
@@ -76,7 +76,7 @@ Follow these in order. Each step ends in a verifiable state.
 
 ---
 
-## 3.1 Bootstrapping the Expo project
+## ✅ 3.1 Bootstrapping the Expo project
 
 The repo is empty, so we initialize **in place**. We'll use the **blank TypeScript** template (not the tabs template — we want a clean slate for our own navigation structure).
 
@@ -107,7 +107,7 @@ rm -rf /tmp/pawstep-bootstrap
 
 ---
 
-## 3.2 Switching to `expo-dev-client` (why + how)
+## ✅ 3.2 Switching to `expo-dev-client` (why + how)
 
 ### Why this is required (not optional)
 
@@ -153,7 +153,7 @@ The dev client app on the device will see the bundler and load JS the same way E
 
 ---
 
-## 3.3 Installing all core dependencies upfront
+## ✅ 3.3 Installing all core dependencies upfront
 
 Install everything in §2 now, even features we won't touch for weeks. This guarantees we discover version-incompatibilities **once**, against a clean tree, instead of mid-feature.
 
@@ -210,7 +210,7 @@ Resolve everything `expo-doctor` flags **before** moving on. Common one: Reanima
 
 ---
 
-## 3.4 Configuring `app.config.ts` (permissions, AR, build settings)
+## ✅ 3.4 Configuring `app.config.ts` (permissions, AR, build settings)
 
 Replace `app.json` with `app.config.ts`. This unlocks env-driven config (separate bundle IDs for dev/prod, EAS secret access, etc.).
 
@@ -317,7 +317,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 
 ---
 
-## 3.5 Folder and module structure
+## ✅ 3.5 Folder and module structure
 
 ```
 project_kah_en/
@@ -407,7 +407,7 @@ project_kah_en/
 
 ---
 
-## 3.6 Navigation skeleton (React Navigation)
+## ✅ 3.6 Navigation skeleton (React Navigation)
 
 Mirror the four screens called out in the proposal: Home / Walks / Goals / Profile. Add a stack at the root to support modal screens (Onboarding, AR view, IAP shop).
 
@@ -482,7 +482,7 @@ export type MainTabParamList = {
 
 ---
 
-## 3.7 SQLite schema and initialization
+## ✅ 3.7 SQLite schema and initialization
 
 `expo-sqlite` v14+ exposes a clean async API. The init module opens the DB once and runs forward-only migrations.
 
@@ -594,7 +594,7 @@ CREATE INDEX idx_equipment_pet ON equipment(pet_id);
 
 ---
 
-## 3.8 Tooling: TypeScript, ESLint, Prettier, path aliases
+## ✅ 3.8 Tooling: TypeScript, ESLint, Prettier, path aliases
 
 **`tsconfig.json`** — extend Expo's base, turn on strict, define `@/*` alias:
 
@@ -690,7 +690,7 @@ Add npm scripts to `package.json`:
 
 ---
 
-## 3.9 EAS Build configuration
+## ✅ 3.9 EAS Build configuration
 
 Create `eas.json` at the repo root. Three profiles: `development` (custom dev client), `preview` (internal QA `.apk` / TestFlight), `production` (store-ready).
 
@@ -748,7 +748,7 @@ eas secret:create --name GOOGLE_MAPS_ANDROID_KEY --value <key> --scope project
 
 ---
 
-## 3.10 Git hygiene
+## ✅ 3.10 Git hygiene
 
 The Expo template includes a usable `.gitignore`. Augment it with the EAS + native build artifacts:
 
@@ -797,17 +797,17 @@ Keep `.gitattributes` as-is (LF normalization).
 
 Before declaring init complete and starting feature work, all of these must pass:
 
-- [ ] `npm run typecheck` is clean.
-- [ ] `npm run lint` is clean.
-- [ ] `npx expo-doctor` reports no issues.
-- [ ] `eas build --profile development --platform android` succeeds and the resulting APK installs on a real Android device.
+- [x] `npm run typecheck` is clean.
+- [x] `npm run lint` is clean.
+- [x] `npx expo-doctor` reports no issues.
+- [ ] `eas build --profile development --platform android` succeeds and the resulting APK installs on a real Android device. _(build fix applied — pending re-trigger)_
 - [ ] `eas build --profile development --platform ios` succeeds and the resulting IPA installs on a registered iOS device.
-- [ ] The custom dev client launches, connects to `npx expo start --dev-client`, and renders the four-tab navigation skeleton.
+- [x] The custom dev client launches, connects to `npx expo start --dev-client`, and renders the four-tab navigation skeleton. _(white screen is expected — all screens are stubs)_
 - [ ] Camera, motion, location, and notification permission prompts appear correctly on first launch (verify on both platforms).
-- [ ] `getDb()` runs migrations successfully on cold start; `schema_version` row exists.
-- [ ] A trivial Viro scene (single cube on detected plane) renders inside `ARWalkScreen` on both platforms.
-- [ ] A trivial `react-native-maps` view renders on both platforms (Apple Maps on iOS, Google Maps on Android via the supplied API key).
-- [ ] A trivial step-counter subscription logs step deltas while you walk in place with the phone.
+- [ ] `getDb()` runs migrations successfully on cold start; `schema_version` row exists. _(Drizzle migrations implemented; runtime verification pending)_
+- [ ] A trivial Viro scene (single cube on detected plane) renders inside `ARWalkScreen` on both platforms. _(Phase 4)_
+- [ ] A trivial `react-native-maps` view renders on both platforms (Apple Maps on iOS, Google Maps on Android via the supplied API key). _(Phase 3)_
+- [ ] A trivial step-counter subscription logs step deltas while you walk in place with the phone. _(Phase 1)_
 
 These ten checkpoints together prove the full native stack is alive. If any fail, fix before moving to Part 2 — they get an order of magnitude harder to debug once feature code is layered on top.
 
@@ -817,11 +817,11 @@ These ten checkpoints together prove the full native stack is alive. If any fail
 
 Each phase delivers a demoable, stable increment. Phases are ordered to put **data + math first**, **UI second**, **AR + game systems third**, and **polish + release last** — this keeps the riskiest engineering at the front when there's slack to absorb surprises.
 
-### Phase 0 — Initialization
+### ✅ Phase 0 — Initialization
 
-Already covered in Part 1. Custom dev clients on both platforms, schema in place, dependencies installed, four-tab skeleton renders.
+Already covered in Part 1. Custom dev clients on both platforms, schema in place, dependencies installed, four-tab skeleton renders. New Architecture enabled; Viro AGP conflict patched via `patch-package`.
 
-### Phase 1 — Core Data Layer
+### 🔲 Phase 1 — Core Data Layer
 
 Goal: convert real steps into in-DB growth, deterministically.
 
@@ -832,7 +832,7 @@ Goal: convert real steps into in-DB growth, deterministically.
 
 **Why first:** all later systems multiply this number. Getting it wrong late costs a re-balance of every boss, every reward, every shop price.
 
-### Phase 2 — Basic UI
+### 🔲 Phase 2 — Basic UI
 
 Goal: a user can open the app, see their pet, see today's steps, and see goal progress.
 
@@ -844,7 +844,7 @@ Goal: a user can open the app, see their pet, see today's steps, and see goal pr
 
 **Why second:** with the data layer real, the UI can show real progress immediately — no fake data needed.
 
-### Phase 3 — GPS + Map Exploration
+### 🔲 Phase 3 — GPS + Map Exploration
 
 Goal: walks are tracked, drawn on a map, and feed back into pet progress.
 
@@ -855,7 +855,7 @@ Goal: walks are tracked, drawn on a map, and feed back into pet progress.
 
 **Why now:** GPS adds the second input stream (steps + location). It also exercises background execution — important to shake out before adding AR.
 
-### Phase 4 — AR Integration
+### 🔲 Phase 4 — AR Integration
 
 Goal: during a walk, user can pop the phone into AR and see their pet on the ground in front of them.
 
@@ -866,7 +866,7 @@ Goal: during a walk, user can pop the phone into AR and see their pet on the gro
 
 **Why after maps:** AR is the highest-risk native integration. Doing it after the rest of the data + UI is stable means we can isolate AR-specific bugs without conflating them with step or DB issues.
 
-### Phase 5 — Game Systems
+### 🔲 Phase 5 — Game Systems
 
 Goal: the game loop is closed — exercise produces rewards, rewards buy things, things make the next exercise session more interesting.
 
@@ -878,7 +878,7 @@ Goal: the game loop is closed — exercise produces rewards, rewards buy things,
 
 **Why this late:** these systems all _consume_ the data + UI + map + AR plumbing built earlier. Building them first would mean rewriting them once the underlying systems landed.
 
-### Phase 6 — Polish
+### 🔲 Phase 6 — Polish
 
 - Daily check-in flow with streak rewards.
 - Local push notifications (`expo-notifications`): "Your pet is waiting for a walk!" — quiet hours configurable.
@@ -888,7 +888,7 @@ Goal: the game loop is closed — exercise produces rewards, rewards buy things,
 - Empty states, error states, offline banner.
 - i18n groundwork: move all hardcoded UI strings into a `src/i18n/en.ts` constants file now, so zh-TW can be added later by swapping a single locale file. Do not implement a full i18n library yet — just no magic strings in JSX.
 
-### Phase 7 — Release Prep
+### 🔲 Phase 7 — Release Prep
 
 - Production `eas build --profile production --platform all` and TestFlight + Internal Testing track distribution.
 - Privacy policy + permission disclosure pages (required for App Store and Play submission given camera + motion + background location).

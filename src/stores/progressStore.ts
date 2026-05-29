@@ -12,6 +12,7 @@ interface ProgressState {
   hydrate: () => Promise<void>;
   setStreakCurrent: (days: number) => Promise<void>;
   incrementTokens: (amount: number) => Promise<void>;
+  addTokens: (amount: number) => Promise<void>;
 }
 
 export const useProgressStore = create<ProgressState>()((set, get) => ({
@@ -37,6 +38,12 @@ export const useProgressStore = create<ProgressState>()((set, get) => ({
   },
 
   incrementTokens: async (amount) => {
+    const next = get().tokens + amount;
+    set({ tokens: next });
+    await setProgress(TOKENS_KEY, next);
+  },
+
+  addTokens: async (amount) => {
     const next = get().tokens + amount;
     set({ tokens: next });
     await setProgress(TOKENS_KEY, next);

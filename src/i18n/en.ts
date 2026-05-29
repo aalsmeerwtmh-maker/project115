@@ -47,4 +47,26 @@ export const en = {
     cat: 'Cat',
     fox: 'Fox',
   },
+
+  // Walks screen
+  walks: {
+    title: 'Walks',
+    startWalk: 'Start Walk',
+    stopWalk: 'Stop Walk',
+    enterAR: 'Enter AR',
+    steps: 'Steps',
+    distance: (km: number) => `${km.toFixed(2)} km`,
+    elapsed: 'Time',
+    pastWalksTitle: 'Past Walks',
+    noPastWalks: 'No walks yet. Start your first walk!',
+    locationDenied: 'Location permission is required to track walks.',
+    walkDate: (dateMs: number) =>
+      new Date(dateMs).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+      }),
+    walkSummary: (distKm: number, steps: number) =>
+      `${distKm.toFixed(2)} km · ${steps.toLocaleString()} steps`,
+  },
 } as const;

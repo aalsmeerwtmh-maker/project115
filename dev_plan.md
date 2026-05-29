@@ -893,12 +893,14 @@ export interface BossDefinition {
   id: string;
   name: string;
   description: string;
+  villainLine: string;        // shown on the challenge screen before the fight (villain style)
   requiredStreakDays: number;
   requiredGrowthValue: number;
   requiredStage: 'baby' | 'child' | 'adult' | 'elder';
   requiredStamina: number;
   tokenReward: number;
-  dialogues: string[];
+  retryBlockHours: number;    // hours the player must wait before retrying after a loss
+  dialogues: string[];        // pet-perspective win lines shown in result modal
 }
 
 export interface EquipmentItem {
@@ -920,6 +922,7 @@ export interface TokenEarnRates {
   checkinPerCell: number;
   streakMilestoneEveryNDays: number;
   streakMilestoneBonus: number;
+  timeInAppPerMinute: number;   // tokens per minute of active app use (walk session active)
 }
 
 export interface GameConfig {
@@ -938,16 +941,31 @@ export interface GameConfig {
 | `streakMilestoneEveryNDays` | `7` |
 | `streakMilestoneBonus` | `10` |
 
-**Bosses:**
+**Bosses (5 total, matching proposal §4-2):**
 
-| id | name | requiredStreakDays | requiredGrowthValue | requiredStage | requiredStamina | tokenReward |
-|---|---|---|---|---|---|---|
-| `boss_mudpaw` | Mudpaw the Rascal | 3 | 5 | `baby` | 55 | 30 |
-| `boss_thornback` | Thornback Rex | 7 | 25 | `child` | 65 | 75 |
-| `boss_ironmaw` | Ironmaw the Titan | 14 | 50 | `adult` | 75 | 150 |
-| `boss_shadowhowl` | Shadowhowl Prime | 21 | 75 | `elder` | 90 | 250 |
+| id | name | requiredStreakDays | requiredGrowthValue | requiredStage | requiredStamina | tokenReward | retryBlockHours |
+|---|---|---|---|---|---|---|---|
+| `boss_mudpaw` | Mudpaw the Rascal | 3 | 5 | `baby` | 55 | 30 | 12 |
+| `boss_thornback` | Thornback Rex | 7 | 25 | `child` | 65 | 75 | 18 |
+| `boss_ironmaw` | Ironmaw the Titan | 14 | 50 | `adult` | 75 | 150 | 24 |
+| `boss_shadowhowl` | Shadowhowl Prime | 21 | 75 | `elder` | 90 | 250 | 24 |
+| `boss_voidstrider` | Voidstrider the Eternal | 30 | 90 | `elder` | 100 | 400 | 48 |
 
-Each boss has 3 win dialogue strings (pet-perspective, shown in a modal after victory) stored under its `dialogues` array in `config.ts`.
+Each boss has:
+- A `villainLine` (villain-style taunting line shown on the challenge screen before the fight — not frightening, suitable for ages 18–35).
+- 3 `dialogues` strings (pet-perspective win lines shown in the result modal after victory).
+- `retryBlockHours`: after a failed challenge, the player must wait this many hours before trying again. The block is stored as a resolved=false `boss` event row with `retryUntil` in the payload; the UI hides the Challenge button and shows a countdown.
+
+**Token earn rates:**
+
+| Field | Value | Rationale |
+|---|---|---|
+| `checkinPerCell` | `5` | Per new geofence cell during a walk |
+| `streakMilestoneEveryNDays` | `7` | Weekly milestone |
+| `streakMilestoneBonus` | `10` | Per weekly milestone |
+| `timeInAppPerMinute` | `1` | 1 token/min while a walk session is active; capped at 60/day to prevent idle farming |
+
+The `timeInAppPerMinute` rate satisfies the proposal requirement that tokens come from "time spent using the software" as well as battle achievements.
 
 **Equipment catalog (7 items):**
 
@@ -985,11 +1003,14 @@ export function calcStreakBonus(): number
 export function isStreakMilestone(consecutiveDays: number): boolean
 export function calcBossReward(bossId: string): number
 export function checkinTokenAmount(): number
+export function timeInAppTokenAmount(): number   // tokens per active walk minute
+export const TIME_IN_APP_DAILY_CAP = 60          // max tokens/day from time-in-app
 ```
 
 Implementation steps:
-1. Write the four functions importing from `@/game/config`.
-2. Add unit tests in `src/game/__tests__/tokens.test.ts`: verify `calcBossReward('boss_mudpaw')` returns 30, `isStreakMilestone(7)` is true, `isStreakMilestone(6)` is false, `isStreakMilestone(14)` is true.
+1. Write the five functions + cap constant, all importing from `@/game/config`.
+2. Add unit tests in `src/game/__tests__/tokens.test.ts`: verify `calcBossReward('boss_mudpaw')` returns 30, `isStreakMilestone(7)` is true, `isStreakMilestone(6)` is false, `isStreakMilestone(14)` is true, `timeInAppTokenAmount()` returns 1.
+3. In `useWalkSession.ts`, add a per-minute timer alongside the elapsed timer that calls `addTokens(timeInAppTokenAmount())` each minute, guarded by a daily cap tracked in `progressStore` (add `timeInAppTokensToday: number` and `resetTimeInAppTokens()` to the store).
 
 ---
 
@@ -1067,8 +1088,12 @@ Data flow:
 1. Read `activePet` from `petStore`, `streakCurrent` from `progressStore`.
 2. Query `getBossEvents()` from `events` repository → build `Set<string>` of defeated boss IDs (resolved = true rows).
 3. Render `FlatList` of `BossCard` components from `getAvailableBosses(activePet)`.
-4. Each card shows per-requirement green check / red cross and a "Challenge" button (disabled if `!canChallengeBoss` or already defeated).
-5. On challenge: call `attemptBoss` → if won, `addTokens`, insert boss + story event rows → show `BossResultModal`.
+4. Each card shows:
+   - Boss `villainLine` (italic, villain-style flavour text).
+   - Per-requirement green check / red cross table.
+   - "Challenge" button — disabled if `!canChallengeBoss`, already defeated, or currently in retry cooldown.
+   - If in retry cooldown: show "Try again in X h Y m" countdown instead of the button.
+5. On challenge: call `attemptBoss` → if won, `addTokens`, insert boss + story event rows → show `BossResultModal` with win dialogue. If lost, insert a boss event row (`resolved = false`, payload includes `retryUntil = Date.now() + boss.retryBlockHours * 3600_000`) → show `BossResultModal` with loss message → disable Challenge button until `retryUntil`.
 
 Boss event payload type stored in `events.payload`:
 ```typescript

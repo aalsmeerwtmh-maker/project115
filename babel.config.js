@@ -6,9 +6,6 @@ module.exports = function (api) {
   return {
     presets: ['babel-preset-expo'],
     plugins: [
-      // Inlines .sql files as string literals so Metro can bundle them.
-      // Required for Drizzle migrations — drizzle-orm/expo-sqlite/migrator reads SQL as strings.
-      ['inline-import', { extensions: ['.sql'] }],
       [
         'module-resolver',
         {

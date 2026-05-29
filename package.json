@@ -63,7 +63,7 @@
     "format": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "doctor": "npx expo-doctor",
-    "db:generate": "drizzle-kit generate",
+    "db:generate": "drizzle-kit generate && node scripts/bundle-migrations.mjs",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage"

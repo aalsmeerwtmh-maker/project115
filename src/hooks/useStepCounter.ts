@@ -3,6 +3,8 @@ import * as Pedometer from 'expo-sensors/build/Pedometer';
 import { Accelerometer } from 'expo-sensors';
 import type { AccelerometerMeasurement } from 'expo-sensors/build/Accelerometer';
 import { useStepStore } from '@/stores/stepStore';
+import { useProgressStore } from '@/stores/progressStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { upsertStepDay } from '@/db/repositories/steps';
 import { computeDailyGrowth } from '@/game/growthFormula';
 
@@ -33,6 +35,8 @@ function magnitude(reading: AccelerometerMeasurement): number {
 export function useStepCounter() {
   const setToday = useStepStore((s) => s.setToday);
   const setIsAvailable = useStepStore((s) => s.setIsAvailable);
+  const streakCurrent = useProgressStore((s) => s.streakCurrent);
+  const dailyGoal = useSettingsStore((s) => s.dailyGoal);
 
   // Mutable refs — never cause re-renders, safe to mutate inside subscriptions.
   const accNoisy = useRef(false);
@@ -42,17 +46,29 @@ export function useStepCounter() {
   const lastSnapshotTime = useRef<number>(0);
   const totalStepsRef = useRef(0);
 
+  const streakRef = useRef(streakCurrent);
+  const goalRef = useRef(dailyGoal);
+
+  useEffect(() => {
+    streakRef.current = streakCurrent;
+  }, [streakCurrent]);
+
+  useEffect(() => {
+    goalRef.current = dailyGoal;
+  }, [dailyGoal]);
+
   const flush = useCallback(async () => {
     const date = todayDate();
     const steps = totalStepsRef.current;
     const growth = computeDailyGrowth({
       stepCount: steps,
-      dailyGoal: 8000,
-      consecutiveStreakDays: 0, // streak will be computed from DB in Phase 2
+      dailyGoal: goalRef.current,
+      consecutiveStreakDays: streakRef.current,
     });
     const row = await upsertStepDay(date, {
       stepCount: steps,
       foodEarned: growth.foodEarned,
+      goal: goalRef.current,
     });
     setToday(row);
   }, [setToday]);

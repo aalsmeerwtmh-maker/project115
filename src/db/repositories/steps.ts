@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, gte } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { steps } from '@/db/schema';
 import type { StepDay, NewStepDay } from '@/db/schema';
@@ -54,4 +54,9 @@ export async function upsertStepDay(
 
 export async function getRecentStepDays(limit: number): Promise<StepDay[]> {
   return db.select().from(steps).orderBy(steps.date).limit(limit);
+}
+
+// Returns step rows for the 7 days starting from `fromDate` (inclusive), 'YYYY-MM-DD'.
+export async function getStepDaysFrom(fromDate: string): Promise<StepDay[]> {
+  return db.select().from(steps).where(gte(steps.date, fromDate)).orderBy(steps.date);
 }

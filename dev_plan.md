@@ -832,7 +832,7 @@ Goal: convert real steps into in-DB growth, deterministically.
 
 **Why first:** all later systems multiply this number. Getting it wrong late costs a re-balance of every boss, every reward, every shop price.
 
-### 🔲 Phase 2 — Basic UI
+### ✅ Phase 2 — Basic UI
 
 Goal: a user can open the app, see their pet, see today's steps, and see goal progress.
 

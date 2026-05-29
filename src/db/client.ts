@@ -23,6 +23,29 @@ const expo = openDatabaseSync('pawstep.db', { enableChangeListener: true });
 export const db = drizzle(expo, { schema });
 
 // Call once on app start. Applies any pending migrations in order, then no-ops on repeat.
+// Seeds a default pet if none exists so the Home screen has something to display.
 export async function initDb(): Promise<void> {
   await migrate(db, { journal, migrations: migrationFiles });
+  await seedDefaultPet();
+}
+
+async function seedDefaultPet(): Promise<void> {
+  const existing = await db.select().from(schema.pets).limit(1);
+  if (existing.length > 0) return;
+
+  const { randomUUID } = await import('expo-crypto');
+  const now = Date.now();
+  await db.insert(schema.pets).values({
+    id: randomUUID(),
+    name: 'Paws',
+    species: 'dog',
+    stage: 'baby',
+    stamina: 50,
+    affection: 0,
+    growthValue: 0,
+    mood: 'normal',
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  });
 }

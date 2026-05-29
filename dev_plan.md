@@ -844,7 +844,7 @@ Goal: a user can open the app, see their pet, see today's steps, and see goal pr
 
 **Why second:** with the data layer real, the UI can show real progress immediately — no fake data needed.
 
-### 🔲 Phase 3 — GPS + Map Exploration
+### ✅ Phase 3 — GPS + Map Exploration
 
 Goal: walks are tracked, drawn on a map, and feed back into pet progress.
 
@@ -854,6 +854,12 @@ Goal: walks are tracked, drawn on a map, and feed back into pet progress.
 - Add geofence-based exploration events (entering a new ~50m grid cell triggers a "new location discovered" event + token reward).
 
 **Why now:** GPS adds the second input stream (steps + location). It also exercises background execution — important to shake out before adding AR.
+
+**Known gaps vs proposal.md (to address in Phase 6 polish):**
+- **No discovery notification UI** — tokens are awarded silently; proposal expects a visible "+N tokens — New location discovered!" toast/banner when entering a new cell.
+- **No exploration map** — proposal describes a persistent map showing which areas have been discovered (unlocked zones), not just polylines of past walks. Geofence cell data is already stored in `events`; a heat-map or cell-shading overlay on the map view is needed.
+- **No random walk events** — proposal describes randomly triggered story events during a walk (by steps, location, or time). Phase 3 only triggers events on new geofence cells; a random event scheduler is missing.
+- **No story dialogue during walks** — exploration should trigger pet-perspective story snippets (per proposal §4-1). Phase 3 fires checkin token rewards only.
 
 ### ✅ Phase 4 — AR Integration
 

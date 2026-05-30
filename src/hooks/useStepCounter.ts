@@ -7,6 +7,7 @@ import { useProgressStore } from '@/stores/progressStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { upsertStepDay } from '@/db/repositories/steps';
 import { computeDailyGrowth } from '@/game/growthFormula';
+import type { StepDay } from '@/db/schema';
 
 // Anti-cheat: ignore a pedometer delta if it would imply more than this many
 // steps per minute since the last update.
@@ -48,6 +49,8 @@ export function useStepCounter() {
 
   const streakRef = useRef(streakCurrent);
   const goalRef = useRef(dailyGoal);
+  // Tracks the last DB row so we can do lightweight in-memory UI updates between DB flushes.
+  const todayRowRef = useRef<StepDay | null>(null);
 
   useEffect(() => {
     streakRef.current = streakCurrent;
@@ -70,6 +73,7 @@ export function useStepCounter() {
       foodEarned: growth.foodEarned,
       goal: goalRef.current,
     });
+    todayRowRef.current = row;
     setToday(row);
   }, [setToday]);
 
@@ -137,6 +141,11 @@ export function useStepCounter() {
         pendingSteps.current += delta;
         lastPedometerSteps.current = incomingSteps;
         lastPedometerTime.current = now;
+
+        // Real-time UI update — update the store in-memory without a DB write.
+        if (todayRowRef.current) {
+          setToday({ ...todayRowRef.current, stepCount: totalStepsRef.current });
+        }
       });
 
       // Hourly snapshot to DB.
@@ -160,7 +169,7 @@ export function useStepCounter() {
       accSub?.remove();
       if (snapshotTimer) clearInterval(snapshotTimer);
     };
-  }, [flush, setIsAvailable]);
+  }, [flush, setIsAvailable, setToday]);
 
   const today = useStepStore((s) => s.today);
   const isAvailable = useStepStore((s) => s.isAvailable);

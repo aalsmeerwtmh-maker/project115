@@ -53,9 +53,7 @@
       "indexes": {
         "idx_equipment_pet": {
           "name": "idx_equipment_pet",
-          "columns": [
-            "pet_id"
-          ],
+          "columns": ["pet_id"],
           "isUnique": false
         }
       },
@@ -64,12 +62,8 @@
           "name": "equipment_pet_id_pets_id_fk",
           "tableFrom": "equipment",
           "tableTo": "pets",
-          "columnsFrom": [
-            "pet_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["pet_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -135,10 +129,7 @@
       "indexes": {
         "idx_events_type_time": {
           "name": "idx_events_type_time",
-          "columns": [
-            "type",
-            "triggered_at"
-          ],
+          "columns": ["type", "triggered_at"],
           "isUnique": false
         }
       },

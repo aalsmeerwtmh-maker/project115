@@ -25,7 +25,6 @@ import {
   ViroARPlaneSelector,
   ViroAmbientLight,
   ViroSphere,
-  ViroAnimatedComponent,
 } from '@reactvision/react-viro';
 import type { ViroAnchor } from '@reactvision/react-viro';
 
@@ -69,34 +68,32 @@ export function PetARScene() {
 
       <ViroARPlaneSelector
         ref={selectorRef}
-        alignment="HorizontalUpward"
-        minWidth={0.3}
-        minHeight={0.3}
+        alignment="Horizontal"
+        minWidth={0.1}
+        minHeight={0.1}
         hideOverlayOnSelection
       >
         {/*
-         * PLACEHOLDER pet representation.
-         * Replace this ViroAnimatedComponent + ViroSphere block with a
-         * Viro3DObject once assets/ar/pet.glb is provided by the team.
+         * PLACEHOLDER pet: orange sphere with idle pulse animation.
+         * ViroAnimatedComponent is avoided — it has a this-binding bug when
+         * the component re-renders after plane selection.
+         * Animation prop is applied directly on ViroSphere instead.
          *
-         * The animated component wraps the geometry so the idle pulse
-         * animation (defined in arResources.ts) runs continuously.
+         * Replace with Viro3DObject once assets/ar/pet.glb is delivered:
+         *   <Viro3DObject
+         *     source={PET_MODEL_PATH}
+         *     position={[0, 0, 0]}
+         *     scale={[0.2, 0.2, 0.2]}
+         *     type="GLB"
+         *     animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: true }}
+         *   />
          */}
-        <ViroAnimatedComponent
-          animation={IDLE_ANIMATION_NAME}
-          loop
-          run
-          delay={0}
-          onStart={() => undefined}
-          onFinish={() => undefined}
-        >
-          {/*
-           * Stand-in sphere: 20 cm radius, orange to match brand palette.
-           * position Y=0.1 places it 10 cm above the plane surface so it
-           * sits visually on the ground rather than half-submerged.
-           */}
-          <ViroSphere position={[0, 0.1, 0]} radius={0.1} materials={[]} />
-        </ViroAnimatedComponent>
+        <ViroSphere
+          position={[0, 0.1, 0]}
+          radius={0.1}
+          materials={['petPlaceholder']}
+          animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: true }}
+        />
       </ViroARPlaneSelector>
     </ViroARScene>
   );

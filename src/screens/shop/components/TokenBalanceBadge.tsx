@@ -2,7 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 
 interface TokenBalanceBadgeProps {
   tokens: number;
@@ -12,7 +12,7 @@ export function TokenBalanceBadge({ tokens }: TokenBalanceBadgeProps) {
   return (
     <View style={styles.badge}>
       <Text style={styles.coinIcon}>🪙</Text>
-      <Text style={styles.label}>{en.shop.tokenBalance(tokens)}</Text>
+      <Text style={styles.label}>{t.shop.tokenBalance(tokens)}</Text>
     </View>
   );
 }

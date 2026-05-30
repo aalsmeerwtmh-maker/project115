@@ -2,7 +2,7 @@ import { View, Text, StyleSheet, ActivityIndicator, TouchableOpacity } from 'rea
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 import type { IapBundle } from '@/game/config';
 
 interface IapBundleRowProps {
@@ -31,7 +31,7 @@ export function IapBundleRow({ bundle, livePrice, onBuy, loading = false }: IapB
         {loading ? (
           <ActivityIndicator color={colors.surface} />
         ) : (
-          <Text style={styles.buyLabel}>{en.shop.iapBuyButton}</Text>
+          <Text style={styles.buyLabel}>{t.shop.iapBuyButton}</Text>
         )}
       </TouchableOpacity>
     </View>

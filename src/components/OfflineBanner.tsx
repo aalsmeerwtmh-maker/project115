@@ -1,43 +1,22 @@
 /**
  * OfflineBanner — slide-in banner shown when the device has no network connectivity.
  *
- * NATIVE BUILD NOTE: This component requires @react-native-community/netinfo.
- * Install it with `npx expo install @react-native-community/netinfo` and then
- * rebuild the dev client before the offline detection will actually work.
- *
- * Until the package is installed, the import below will fail at runtime.
- * The try/catch wrapper around the import means the banner simply never shows
- * (no crash) — the app continues to function normally offline-first.
+ * NATIVE BUILD NOTE: @react-native-community/netinfo is installed but requires
+ * a dev client rebuild before native connectivity detection works on device.
+ * Rebuild with: eas build --profile development --platform android
  */
 import { useEffect } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
+import { useNetInfo } from '@react-native-community/netinfo';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 
-// ---------------------------------------------------------------------------
-// Optional NetInfo import — wrapped so the app doesn't crash if the package
-// isn't installed yet (dev client rebuild needed after `npx expo install`).
-// ---------------------------------------------------------------------------
-let useNetInfoModule: (() => { isConnected: boolean | null }) | null = null;
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const NetInfo = require('@react-native-community/netinfo');
-  useNetInfoModule = NetInfo.useNetInfo ?? NetInfo.default?.useNetInfo ?? null;
-} catch {
-  // Package not installed — offline detection disabled until dev client rebuild.
-}
-
 function useIsOffline(): boolean {
-  if (useNetInfoModule) {
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    const { isConnected } = useNetInfoModule();
-    return isConnected === false;
-  }
-  // Package unavailable — assume online so the banner never appears.
-  return false;
+  const { isConnected } = useNetInfo();
+  return isConnected === false;
 }
 
 const BANNER_HEIGHT = 44;

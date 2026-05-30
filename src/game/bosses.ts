@@ -17,20 +17,14 @@ export function getAllBosses(): BossDefinition[] {
 export function getAvailableBosses(pet: Pet): BossDefinition[] {
   const stageOrder: Pet['stage'][] = ['baby', 'child', 'adult', 'elder'];
   const petStageIndex = stageOrder.indexOf(pet.stage);
-  return GAME_CONFIG.bosses.filter(
-    (b) => stageOrder.indexOf(b.requiredStage) <= petStageIndex,
-  );
+  return GAME_CONFIG.bosses.filter((b) => stageOrder.indexOf(b.requiredStage) <= petStageIndex);
 }
 
 /**
  * Deterministic stat-check: all four requirements must be met simultaneously.
  * No RNG — same inputs always yield the same result.
  */
-export function canChallengeBoss(
-  boss: BossDefinition,
-  pet: Pet,
-  streakDays: number,
-): boolean {
+export function canChallengeBoss(boss: BossDefinition, pet: Pet, streakDays: number): boolean {
   const stageOrder: Pet['stage'][] = ['baby', 'child', 'adult', 'elder'];
   return (
     streakDays >= boss.requiredStreakDays &&
@@ -54,11 +48,7 @@ export interface BossAttemptResult {
  *
  * On a loss: tokensEarned = 0, dialogueLine is an empty string.
  */
-export function attemptBoss(
-  boss: BossDefinition,
-  pet: Pet,
-  streakDays: number,
-): BossAttemptResult {
+export function attemptBoss(boss: BossDefinition, pet: Pet, streakDays: number): BossAttemptResult {
   const won = canChallengeBoss(boss, pet, streakDays);
 
   if (!won) {

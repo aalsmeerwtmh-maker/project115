@@ -71,7 +71,9 @@ describe('canChallengeBoss — boss_mudpaw', () => {
   const boss = getAllBosses().find((b) => b.id === 'boss_mudpaw')!;
 
   it('returns false when stamina is 50 (below required 55)', () => {
-    expect(canChallengeBoss(boss, makePet({ stage: 'baby', stamina: 50, growthValue: 5 }), 3)).toBe(false);
+    expect(canChallengeBoss(boss, makePet({ stage: 'baby', stamina: 50, growthValue: 5 }), 3)).toBe(
+      false,
+    );
   });
 
   it('returns false when streak is insufficient', () => {
@@ -79,7 +81,9 @@ describe('canChallengeBoss — boss_mudpaw', () => {
   });
 
   it('returns false when growthValue is below threshold', () => {
-    expect(canChallengeBoss(boss, makePet({ stage: 'baby', stamina: 55, growthValue: 4 }), 3)).toBe(false);
+    expect(canChallengeBoss(boss, makePet({ stage: 'baby', stamina: 55, growthValue: 4 }), 3)).toBe(
+      false,
+    );
   });
 
   it('returns true when all requirements are met exactly', () => {

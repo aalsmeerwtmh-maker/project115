@@ -28,7 +28,8 @@ describe('calcBossReward', () => {
   it('returns 75 for boss_thornback', () => expect(calcBossReward('boss_thornback')).toBe(75));
   it('returns 150 for boss_ironmaw', () => expect(calcBossReward('boss_ironmaw')).toBe(150));
   it('returns 250 for boss_shadowhowl', () => expect(calcBossReward('boss_shadowhowl')).toBe(250));
-  it('returns 400 for boss_voidstrider', () => expect(calcBossReward('boss_voidstrider')).toBe(400));
+  it('returns 400 for boss_voidstrider', () =>
+    expect(calcBossReward('boss_voidstrider')).toBe(400));
   it('returns 0 for an unknown boss id', () => expect(calcBossReward('boss_unknown')).toBe(0));
 });
 

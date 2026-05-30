@@ -12,7 +12,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 
 type GoalsNav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -58,10 +58,10 @@ export function GoalsScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.heading}>{en.goals.title}</Text>
+        <Text style={styles.heading}>{t.goals.title}</Text>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{en.goals.streakSectionTitle}</Text>
+          <Text style={styles.sectionTitle}>{t.goals.streakSectionTitle}</Text>
 
           <View style={styles.calendarRow}>
             {last7Dates.map((date) => {
@@ -87,27 +87,27 @@ export function GoalsScreen() {
 
           <View style={styles.streakRow}>
             <Text style={styles.streakEmoji}>🔥</Text>
-            <Text style={styles.streakText}>{en.goals.currentStreak(streakCurrent)}</Text>
+            <Text style={styles.streakText}>{t.goals.currentStreak(streakCurrent)}</Text>
           </View>
 
           <View style={styles.bossButtonWrapper}>
-            <PrimaryButton label={en.boss.title} onPress={() => navigation.navigate('Boss')} />
+            <PrimaryButton label={t.boss.title} onPress={() => navigation.navigate('Boss')} />
           </View>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Next goal</Text>
-          <Text style={styles.nextGoalText}>{en.goals.nextGoal(nextMilestone(dailyGoal))}</Text>
+          <Text style={styles.nextGoalText}>{t.goals.nextGoal(nextMilestone(dailyGoal))}</Text>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{en.goals.badgesTitle}</Text>
+          <Text style={styles.sectionTitle}>{t.goals.badgesTitle}</Text>
           <View style={styles.badgeRail}>
             {['7-Day Streak', '30-Day Streak', '100K Steps', 'First Walk'].map((badge) => (
               <View key={badge} style={styles.badgePlaceholder}>
                 <Text style={styles.badgeEmoji}>🏅</Text>
                 <Text style={styles.badgeLabel}>{badge}</Text>
-                <Text style={styles.badgeComingSoon}>{en.goals.badgePlaceholder}</Text>
+                <Text style={styles.badgeComingSoon}>{t.goals.badgePlaceholder}</Text>
               </View>
             ))}
           </View>

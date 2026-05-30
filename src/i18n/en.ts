@@ -37,6 +37,15 @@ export const en = {
     quietHoursLabel: 'Quiet hours',
     quietHoursStart: 'Start',
     quietHoursEnd: 'End',
+    privacyPolicy: 'Privacy Policy',
+    termsOfUse: 'Terms of Use',
+  },
+
+  // Legal screens
+  legal: {
+    privacyPolicyTitle: 'Privacy Policy',
+    termsTitle: 'Terms of Use',
+    backButton: 'Back',
   },
 
   // Pet moods

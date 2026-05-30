@@ -10,6 +10,8 @@ export type RootStackParamList = {
   Boss: undefined;
   Shop: undefined;
   ExplorationMap: undefined;
+  PrivacyPolicy: undefined;
+  Terms: undefined;
 };
 
 // The four bottom tabs.

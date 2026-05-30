@@ -37,6 +37,15 @@ export const zhTW = {
     quietHoursLabel: '免打擾時段',
     quietHoursStart: '開始',
     quietHoursEnd: '結束',
+    privacyPolicy: '隱私權政策',
+    termsOfUse: '使用條款',
+  },
+
+  // Legal screens
+  legal: {
+    privacyPolicyTitle: '隱私權政策',
+    termsTitle: '使用條款',
+    backButton: '返回',
   },
 
   // Pet moods

@@ -1,5 +1,7 @@
 import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { usePetStore } from '@/stores/petStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import type { Locale } from '@/stores/settingsStore';
@@ -10,12 +12,16 @@ import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
+import type { RootStackParamList } from '@/navigation/types';
 
 // Hours 0–23 for the quiet-hours stepper.
 const HOUR_MIN = 0;
 const HOUR_MAX = 23;
 
+type ProfileNav = NativeStackNavigationProp<RootStackParamList>;
+
 export function ProfileScreen() {
+  const navigation = useNavigation<ProfileNav>();
   const activePet = usePetStore((s) => s.activePet);
   const notificationsEnabled = useSettingsStore((s) => s.notificationsEnabled);
   const quietHoursStart = useSettingsStore((s) => s.quietHoursStart);
@@ -211,6 +217,26 @@ export function ProfileScreen() {
           <Text style={styles.sectionTitle}>{t.profile.aboutSection}</Text>
           <Text style={styles.aboutName}>{t.profile.appName}</Text>
           <Text style={styles.aboutVersion}>Version {t.profile.appVersion}</Text>
+
+          <View style={styles.divider} />
+
+          <TouchableOpacity
+            style={styles.legalLink}
+            onPress={() => navigation.navigate('PrivacyPolicy')}
+            accessibilityRole="button"
+            accessibilityLabel={t.profile.privacyPolicy}
+          >
+            <Text style={styles.legalLinkText}>{t.profile.privacyPolicy}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.legalLink}
+            onPress={() => navigation.navigate('Terms')}
+            accessibilityRole="button"
+            accessibilityLabel={t.profile.termsOfUse}
+          >
+            <Text style={styles.legalLinkText}>{t.profile.termsOfUse}</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -349,5 +375,12 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textSecondary,
     marginTop: 4,
+  },
+  legalLink: {
+    paddingVertical: spacing.sm,
+  },
+  legalLinkText: {
+    ...typography.body,
+    color: colors.primary,
   },
 });

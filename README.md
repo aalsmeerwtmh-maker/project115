@@ -1,8 +1,8 @@
 # PawStep — Exercise with E-Pet
 
-PawStep turns real-world exercise into a virtual pet adventure. Your daily steps and GPS walks feed your pet's growth, unlock new maps, and power up boss challenges. During a walk, you can open an AR camera view and see your pet exploring the world around you.
+PawStep turns real-world exercise into a virtual pet adventure. Walk outside, count your steps, and discover new map tiles — your pet grows stronger, changes mood, and eventually faces five increasingly difficult boss challenges. During a walk you can open an AR camera view and see your pet standing on the ground in the world around you. The app runs entirely offline; all data lives on the device.
 
-Built with React Native + Expo for iOS and Android.
+Built with React Native + Expo SDK 56 for iOS and Android. Phases 0–6 complete; Phase 7 (release prep) is in progress.
 
 ---
 
@@ -10,55 +10,52 @@ Built with React Native + Expo for iOS and Android.
 
 - [Tech Stack](#tech-stack)
 - [Prerequisites](#prerequisites)
-- [First-Time Setup](#first-time-setup)
-- [Running the App](#running-the-app)
+- [Quick Start](#quick-start)
+- [Dev Workflow](#dev-workflow)
 - [Project Structure](#project-structure)
-- [For Designers — Changing Assets](#for-designers--changing-assets)
-- [For Designers — Changing the Theme](#for-designers--changing-the-theme)
-- [Adding a New Screen](#adding-a-new-screen)
-- [Adding a New Database Table](#adding-a-new-database-table)
-- [Code Quality](#code-quality)
+- [Game Balance Tuning](#game-balance-tuning)
+- [Asset Handoff](#asset-handoff)
+- [Environment Variables and Secrets](#environment-variables-and-secrets)
+- [Known Limitations](#known-limitations)
+- [Further Reading](#further-reading)
 
 ---
 
 ## Tech Stack
 
-| Layer         | Library                    | Purpose                                                           |
-| ------------- | -------------------------- | ----------------------------------------------------------------- |
-| Framework     | React Native + Expo SDK 56 | Cross-platform iOS/Android                                        |
-| Language      | TypeScript (strict)        | Type safety across the codebase                                   |
-| Navigation    | React Navigation 7         | Screen routing and tab bar                                        |
-| State         | Zustand                    | Global app state (pet, steps, progress)                           |
-| Local DB      | expo-sqlite                | Offline-first persistence                                         |
-| AR            | @reactvision/react-viro    | Pet appears in the real world via camera                          |
-| Steps         | expo-sensors (Pedometer)   | Phone step counter chip — official Expo SDK, no smartwatch needed |
-| GPS           | expo-location              | Walk tracking and exploration events                              |
-| Maps          | react-native-maps          | Displaying past walks                                             |
-| Notifications | expo-notifications         | Pet mood alerts, daily reminders                                  |
-| IAP           | react-native-iap           | Token bundles and cosmetic purchases                              |
-| JSI bridge    | react-native-nitro-modules | JSI bridge layer required by react-native-iap v15                 |
-| Build         | EAS Build + EAS Submit     | Cloud builds for iOS and Android                                  |
+| Layer | Library | Version | Purpose |
+|---|---|---|---|
+| Framework | React Native + Expo | SDK 56 | Cross-platform iOS/Android |
+| Language | TypeScript | ~6.0 | Strict mode throughout |
+| Navigation | React Navigation | 7 | Native stack + bottom tabs |
+| State | Zustand | ^5.0 | Global in-memory state (pet, steps, progress, settings) |
+| Local DB | expo-sqlite + Drizzle ORM | SDK 56 / ^0.45 | Offline-first persistence with type-safe queries |
+| AR | @reactvision/react-viro | ^2.55 | Pet in AR via ARKit (iOS) and ARCore (Android) |
+| Step counting | expo-sensors Pedometer | SDK 56 | Phone step counter — no smartwatch required |
+| GPS | expo-location | SDK 56 | Walk tracking and geofence cell discovery |
+| Maps | react-native-maps | 1.27 | Past walk polylines and exploration map |
+| Notifications | expo-notifications | SDK 56 | Daily reminders and pet mood alerts |
+| IAP | react-native-iap | ^15 | Token bundles and cosmetic purchases |
+| JSI bridge | react-native-nitro-modules | ^0.35 | Required by react-native-iap v15 |
+| Animation | react-native-reanimated | 4.3 | UI animations (requires New Architecture) |
+| Build | EAS Build + EAS Submit | — | Cloud builds for iOS and Android |
 
 ---
 
 ## Prerequisites
 
-Before setting up, make sure you have:
-
 - **Node.js 20+** — [nodejs.org](https://nodejs.org)
-- **npm 10+** — comes with Node
+- **npm 10+** — bundled with Node
 - **EAS CLI** — `npm install -g eas-cli`
 - **Expo account** — [expo.dev](https://expo.dev) (free)
-- A **physical iOS or Android device** — the app uses native AR and step-counter modules that do not run in a simulator
+- **A physical iOS or Android device** — the AR library and step counter do not run in a simulator or Expo Go
+- **Tailscale** (WSL2 only) — required to connect the device to the Metro bundler running inside WSL2; see [Dev Workflow](#dev-workflow)
 
-> **Why can't I use Expo Go?**
-> The AR library (`@reactvision/react-viro`) and step-counter module ship native code that Expo Go does not include. We use a custom dev client instead — it works exactly like Expo Go (QR code, live reload) but with our native modules baked in.
+> **Why not Expo Go?** `@reactvision/react-viro`, `expo-sensors` (Motion/ACTIVITY_RECOGNITION), and `react-native-iap` all ship native code that Expo Go does not include. We use a custom dev client that works identically to Expo Go but with our native modules baked in.
 
 ---
 
-## First-Time Setup
-
-**1. Clone the repo and install dependencies**
+## Quick Start
 
 ```bash
 git clone https://github.com/aalsmeerwtmh-maker/project115.git
@@ -66,65 +63,100 @@ cd project115
 npm install
 ```
 
-> **New Architecture is enabled** (`newArchEnabled: true` in `app.config.ts`). This is required by `react-native-reanimated` 4.x, `react-native-worklets`, and `react-native-iap` v15, all of which include hard Gradle guards that fail builds on Old Architecture. `patch-package` applies automatically during `npm install` (via the `postinstall` script) and fixes a Viro build conflict that would otherwise occur under New Architecture.
+`patch-package` runs automatically via the `postinstall` script and applies `patches/@reactvision+react-viro+2.55.0.patch`, which fixes a Viro/New Architecture Gradle conflict.
 
-**2. Log in to EAS**
-
-```bash
-eas login
-```
-
-**3. Build the custom dev client onto your device**
-
-This only needs to be done once (and again whenever a new native module is added).
-
-```bash
-# iOS
-eas build --profile development --platform ios
-
-# Android
-eas build --profile development --platform android
-```
-
-- **iOS** — you'll need to register your device first: `eas device:create`. The build is then installed via the EAS install link or TestFlight.
-- **Android** — EAS produces a `.apk` you can install directly by sideloading.
-
-**4. Set up environment variables**
-
-Copy the example env file and fill in values:
-
-```bash
-cp .env.example .env
-```
-
-Required keys:
-
-| Key                       | Where to get it                                                                 |
-| ------------------------- | ------------------------------------------------------------------------------- |
-| `GOOGLE_MAPS_ANDROID_KEY` | [Google Cloud Console](https://console.cloud.google.com) → Maps SDK for Android |
-
-> iOS uses Apple Maps by default and does not need a key.
+Then follow the [Dev Workflow](#dev-workflow) section to build the custom dev client and start Metro.
 
 ---
 
-## Running the App
+## Dev Workflow
 
-Once the dev client is installed on your device:
+### Starting Metro
+
+The dev machine runs WSL2. Tailscale provides a stable VPN IP (`100.69.13.58`) so the physical device can reach the Metro server across the WSL2 network boundary.
 
 ```bash
 npm start
 ```
 
-Scan the QR code with the PawStep dev client app (not the regular Expo Go app). The JS bundle will load and hot-reload as you edit files.
-
-Other useful commands:
+This expands to:
 
 ```bash
-npm run typecheck   # TypeScript type check (no output = all good)
-npm run lint        # ESLint check
-npm run format      # Auto-format all files with Prettier
-npm run doctor      # Check for Expo SDK version mismatches
+REACT_NATIVE_PACKAGER_HOSTNAME=100.69.13.58 expo start --dev-client
 ```
+
+To also clear the Metro cache (required after adding a native module or changing `babel.config.js`):
+
+```bash
+REACT_NATIVE_PACKAGER_HOSTNAME=100.69.13.58 npx expo start -c --dev-client
+```
+
+Scan the QR code with the PawStep dev client app (not the regular Expo Go app).
+
+### ADB wireless debugging (WSL2, no USB)
+
+USB passthrough to WSL2 requires extra setup. Wireless ADB is easier:
+
+1. On the Android device, enable **Developer options** and **Wireless debugging**.
+2. Tap **Pair device with pairing code** — note the IP, port, and 6-digit code.
+3. In WSL2:
+   ```bash
+   adb pair <device-ip>:<pairing-port>
+   # enter the 6-digit code when prompted
+   adb connect <device-ip>:<debug-port>
+   adb devices   # verify the device appears
+   ```
+4. The pairing port and debug port are different; both are shown in the Wireless debugging settings on the device.
+
+### Building the dev client
+
+The dev client must be rebuilt whenever a new native module is added. Use EAS Build so you don't need a local Xcode or Android Studio install:
+
+```bash
+# Android (installs as .apk — sideload directly)
+eas build --profile development --platform android
+
+# iOS (register your device first, then install via EAS install link)
+eas device:create
+eas build --profile development --platform ios
+```
+
+### EAS build profiles cheat sheet
+
+| Profile | Distribution | Android output | iOS output | Use for |
+|---|---|---|---|---|
+| `development` | Internal | `.apk` | `.ipa` | Day-to-day dev client |
+| `preview` | Internal | `.apk` | `.ipa` | QA / stakeholder testing |
+| `production` | Store | `.aab` | `.ipa` | App Store / Play Store submission |
+
+```bash
+eas build --profile development --platform android
+eas build --profile preview --platform all
+eas build --profile production --platform all
+```
+
+### Running tests
+
+```bash
+npm test               # Jest — runs all test files
+npm run test:watch     # Jest in watch mode
+npm run test:coverage  # Jest with coverage report
+npm run typecheck      # tsc --noEmit (zero output = clean)
+npm run lint           # ESLint
+npm run format         # Prettier (auto-fix)
+```
+
+### Adding a DB migration
+
+1. Edit `src/db/schema.ts`.
+2. Run:
+   ```bash
+   npm run db:generate
+   ```
+   This runs `drizzle-kit generate` and then `scripts/bundle-migrations.mjs`, which rewrites `src/db/migrations.ts` automatically with the new SQL bundled as a TypeScript string export.
+3. Open `src/db/client.ts`, import the new export (`m0001`, `m0002`, etc.), and add it to `migrationFiles`.
+
+Never edit `src/db/drizzle/` by hand or delete an existing migration.
 
 ---
 
@@ -132,170 +164,137 @@ npm run doctor      # Check for Expo SDK version mismatches
 
 ```
 project_kah_en/
-├── App.tsx                        # Entry point — mounts providers and navigation
-├── app.config.ts                  # Expo config: permissions, bundle IDs, plugins
-├── eas.json                       # EAS Build profiles (development / preview / production)
-├── assets/                        # Static assets (see "For Designers" below)
-│   ├── icon.png                   # App icon (all platforms)
-│   ├── splash-icon.png            # Splash screen image
-│   ├── android-icon-foreground.png # Android adaptive icon foreground layer
-│   ├── pets/                      # 2D pet sprites used on the Home screen
-│   └── ar/                        # 3D pet models (.glb) used in AR scenes
-├── patches/                       # patch-package patches for dependency fixes
-│   └── @reactvision+react-viro+2.55.0.patch  # neutralizes Viro's broken AGP downgrade
+├── App.tsx                          # Entry point — mounts providers, calls initDb(), renders RootNavigator
+├── app.config.ts                    # Expo config: bundle IDs, permissions, plugins, EAS project ID
+├── eas.json                         # EAS Build profiles (development / preview / production)
+├── scripts/
+│   └── bundle-migrations.mjs        # Post-codegen script: bundles .sql files → migrations.ts
+├── patches/
+│   └── @reactvision+react-viro+2.55.0.patch   # Neutralizes Viro's AGP 4.1.1 downgrade (New Architecture fix)
+├── assets/
+│   ├── icon.png                     # App icon (iOS + Android)
+│   ├── splash-icon.png              # Splash screen logo
+│   ├── android-icon-foreground.png  # Android adaptive icon foreground layer
+│   ├── android-icon-background.png  # Android adaptive icon background color
+│   ├── android-icon-monochrome.png  # Android notification icon (monochrome)
+│   ├── pets/                        # 2D pet sprites referenced by PetAvatar.tsx
+│   └── ar/
+│       └── markers/                 # AR image markers (placeholder PNGs — replace before demo)
 └── src/
-    ├── navigation/                # Screen routing
-    │   ├── RootNavigator.tsx      # Root stack (Onboarding → Main tabs / AR modal)
-    │   ├── BottomTabs.tsx         # The four main tabs
-    │   └── types.ts               # TypeScript route param types
-    ├── screens/                   # One folder per screen
-    │   ├── home/                  # Pet display, daily step ring, mood
-    │   ├── walks/                 # Walk session, map, AR launch
-    │   ├── goals/                 # Streak calendar, boss challenges
-    │   ├── profile/               # Pet roster, settings
-    │   └── onboarding/            # First-launch flow
-    ├── components/                # Reusable UI pieces shared across screens
-    │   ├── PetAvatar.tsx          # Pet sprite component
-    │   ├── StepRing.tsx           # Animated circular step progress
-    │   └── PrimaryButton.tsx      # Main CTA button
-    ├── stores/                    # Zustand global state (one file per domain)
-    │   ├── petStore.ts            # Active pet data
-    │   ├── stepStore.ts           # Today's step count and distance
-    │   ├── progressStore.ts       # Streaks, tokens, unlocked maps
-    │   └── settingsStore.ts       # User preferences (goal, notifications)
-    ├── hooks/                     # React hooks wrapping native APIs
-    │   ├── useStepCounter.ts      # Step counter sensor subscription
-    │   ├── useLocation.ts         # GPS location during walks
-    │   └── usePet.ts              # Read/update the active pet
-    ├── db/                        # SQLite persistence layer
-    │   ├── client.ts              # Drizzle instance (db) + initDb() migration runner
-    │   ├── schema.ts              # All table definitions — the source of truth for the DB shape
-    │   ├── drizzle/               # Generated migration files (do not edit manually)
-    │   └── repositories/          # Type-safe query functions using the Drizzle query builder
-    │       ├── pets.ts
-    │       ├── steps.ts
-    │       ├── progress.ts
-    │       ├── events.ts
-    │       └── equipment.ts
-    ├── game/                      # Pure game logic — no React, fully unit-testable
-    │   ├── growthFormula.ts       # steps → food → pet growth calculation
-    │   ├── tokens.ts              # Token earn/spend rules
-    │   ├── streaks.ts             # Consecutive-day streak logic
-    │   └── bosses.ts              # Boss definitions and unlock conditions
-    ├── ar/                        # AR scenes (Viro)
-    │   ├── PetARScene.tsx         # Pet anchored to a real ground plane
-    │   ├── ImageMarkerScene.tsx   # Location events triggered by camera scanning
-    │   └── arResources.ts         # Paths to 3D models and image markers
-    ├── services/                  # Wrappers for external APIs
-    │   ├── notifications.ts       # Schedule / cancel push notifications
-    │   ├── iap.ts                 # In-app purchase flow
-    │   └── analytics.ts           # Analytics stub (provider TBD)
-    ├── theme/                     # Visual design tokens
-    │   ├── colors.ts              # Brand color palette
-    │   ├── spacing.ts             # Margin/padding scale
-    │   └── typography.ts          # Font sizes and weights
+    ├── navigation/
+    │   ├── RootNavigator.tsx        # Root native stack; ARWalk is a fullScreenModal here
+    │   ├── BottomTabs.tsx           # Four-tab layout: Home, Walks, Goals, Profile
+    │   └── types.ts                 # RootStackParamList + MainTabParamList
+    ├── screens/
+    │   ├── home/                    # Pet avatar, daily step ring, mood, check-in modal
+    │   ├── walks/                   # Walk session, polyline map, AR launch, exploration map
+    │   ├── goals/                   # Streak calendar, boss challenge list
+    │   ├── boss/                    # Full-screen boss detail and result modal
+    │   ├── shop/                    # Equipment shop, token bundles, IAP
+    │   ├── profile/                 # Pet roster, settings (goal, notifications, language)
+    │   └── onboarding/              # First-launch flow: species, goal, permissions
+    ├── components/                  # Shared UI: PetAvatar, StepRing, PrimaryButton, OfflineBanner, etc.
+    ├── stores/
+    │   ├── petStore.ts              # Active pet data; hydrated from DB on startup
+    │   ├── stepStore.ts             # Today's step count and sensor availability flag
+    │   ├── progressStore.ts         # Streak, token balance, time-in-app tokens
+    │   └── settingsStore.ts         # Daily goal, notifications toggle, quiet hours, locale
+    ├── hooks/
+    │   ├── useStepCounter.ts        # expo-sensors Pedometer subscription
+    │   ├── useLocation.ts           # GPS tracking during walk sessions
+    │   ├── useWalkSession.ts        # Walk orchestrator: timer, polyline, cell discovery, walk events
+    │   └── usePet.ts                # Read / update the active pet via petStore
+    ├── db/
+    │   ├── client.ts                # Lazy Drizzle instance + initDb() migration runner + default pet seed
+    │   ├── schema.ts                # All five table definitions — source of truth for the DB shape
+    │   ├── migrations.ts            # AUTO-GENERATED — do not edit; run npm run db:generate
+    │   ├── drizzle/                 # Generated SQL files + journal — do not edit manually
+    │   └── repositories/            # Typed query functions: pets, steps, progress, events, equipment
+    ├── game/                        # Pure TypeScript — no React, no native, fully unit-testable
+    │   ├── config.ts                # GAME_CONFIG: all tuneable numbers live here
+    │   ├── growthFormula.ts         # steps → food_earned → growth_value conversion
+    │   ├── tokens.ts                # Token earn/spend rules and daily caps
+    │   ├── streaks.ts               # Consecutive-day streak logic and multiplier formula
+    │   └── bosses.ts                # Boss unlock conditions and challenge evaluation
+    ├── ar/
+    │   ├── PetARScene.tsx           # Pet anchored to detected ground plane (placeholder sphere until GLB delivered)
+    │   ├── ImageMarkerScene.tsx     # Location events triggered by camera scanning image markers
+    │   └── arResources.ts           # Animation registration, material definitions, marker target registration
+    ├── services/
+    │   ├── iap.ts                   # react-native-iap wrapper (ISOLATION: only file that imports from rn-iap)
+    │   ├── notifications.ts         # expo-notifications wrapper (ISOLATION: only file that imports from expo-notifications)
+    │   ├── haptics.ts               # Named haptic feedback functions (reward, success, selection)
+    │   └── analytics.ts             # Stub — provider to be chosen in Phase 7
+    ├── theme/
+    │   ├── colors.ts                # Brand palette: primary orange, cream background, semantic colors
+    │   ├── spacing.ts               # 4-pt grid (xs/sm/md/lg/xl/xxl) + border radius scale
+    │   └── typography.ts            # Font sizes, weights, and line heights
+    ├── i18n/
+    │   ├── en.ts                    # English strings
+    │   ├── zh-TW.ts                 # Traditional Chinese strings
+    │   └── index.ts                 # `t` proxy — reads current locale from settingsStore at render time
     └── utils/
-        ├── date.ts                # YYYY-MM-DD formatting, unix ms helpers
-        └── id.ts                  # UUID generation for DB rows
+        ├── date.ts                  # YYYY-MM-DD formatting, unix-ms helpers
+        └── id.ts                    # UUID generation for DB row IDs
 ```
 
 ---
 
-## For Designers — Changing Assets
+## Game Balance Tuning
 
-All static assets live in the `assets/` folder at the project root.
+All tuneable game numbers live in `src/game/config.ts` under `GAME_CONFIG`. Edit that file — never hardcode numbers elsewhere.
 
-### App icon and splash screen
-
-| File                                 | Used for                         | Recommended size                                |
-| ------------------------------------ | -------------------------------- | ----------------------------------------------- |
-| `assets/icon.png`                    | iOS and Android app icon         | 1024 × 1024 px                                  |
-| `assets/splash-icon.png`             | Splash screen logo               | 200 × 200 px (centered on white/cream)          |
-| `assets/android-icon-foreground.png` | Android adaptive icon foreground | 1024 × 1024 px (safe zone: center 640 × 640 px) |
-
-Just replace the file — keep the exact same filename. EAS Build picks up the new image automatically on the next build.
-
-### Pet sprites (2D — used on the Home screen)
-
-Place sprite files in `assets/pets/`. They are referenced from the `PetAvatar` component in `src/components/PetAvatar.tsx`. Format: **PNG with transparency**.
-
-### 3D pet models (used in AR)
-
-Place `.glb` model files in `assets/ar/`. They are referenced from `src/ar/arResources.ts`. Only `.glb` (binary glTF) is supported by the AR library — `.fbx` and `.obj` must be converted first.
-
-> Free converter: [Blender](https://blender.org) can import .fbx/.obj and export .glb.
+See [docs/customization.md](docs/customization.md) for a complete annotated reference of every field.
 
 ---
 
-## For Designers — Changing the Theme
+## Asset Handoff
 
-All design tokens are in `src/theme/`. You do not need to touch any screen or component files to change the visual style.
+The art team must supply several files before the app is demo-ready. A complete checklist with exact specs is in [docs/assets.md](docs/assets.md).
 
-### Colors — `src/theme/colors.ts`
-
-```ts
-export const colors = {
-  primary: '#F5A623', // warm orange — buttons, highlights, step ring fill
-  background: '#FDF8E8', // cream white — main app background
-  // add more here as the palette grows
-} as const;
-```
-
-Change the hex values to update the color everywhere it is used across the app.
-
-### Spacing — `src/theme/spacing.ts`
-
-Defines the margin/padding scale (e.g. `spacing.sm`, `spacing.md`, `spacing.lg`). Edit the values here instead of using magic numbers in component files.
-
-### Typography — `src/theme/typography.ts`
-
-Font sizes, line heights, and font weights. If you want to use a custom font, load it via `expo-font` in `App.tsx` and reference the font family name here.
+Summary of what is still needed:
+- `assets/ar/pet.glb` — the 3D pet model for AR
+- Real AR image markers (3 files) to replace the current placeholder PNGs in `assets/ar/markers/`
+- Equipment sprite images for all 7 shop items
 
 ---
 
-## Adding a New Screen
+## Environment Variables and Secrets
 
-1. Create a folder under `src/screens/yourscreen/` with a `YourScreen.tsx` file.
-2. Add the screen name and params to the appropriate type in `src/navigation/types.ts`.
-3. Register the screen in `src/navigation/RootNavigator.tsx` (for full-screen/modal) or `src/navigation/BottomTabs.tsx` (for a new tab).
-4. Navigate to it from another screen with:
+| Variable | Platform | How to set | Purpose |
+|---|---|---|---|
+| `GOOGLE_MAPS_ANDROID_KEY` | Android only | EAS secret (production) or `.env` (local dev) | Google Maps SDK for the walk history and exploration map |
 
-```ts
-navigation.navigate('YourScreen', { param: value });
-```
+iOS uses Apple Maps and requires no key.
 
----
-
-## Adding a New Database Table
-
-1. Add the table to `src/db/schema.ts` using Drizzle table definitions.
-2. Run `npm run db:generate` — Drizzle Kit reads the schema diff and writes a new `.sql` file into `src/db/drizzle/`.
-3. Open `src/db/client.ts`, import the new `.sql` file, and add its tag to `migrationFiles`.
-4. Create a repository file at `src/db/repositories/your_table.ts` with typed query functions using the Drizzle query builder.
-5. Call the repository from a Zustand store or a custom hook — never directly from a screen component.
-
-> Never modify or delete an existing migration file. Users who already have the app installed have already run those migrations. Always generate a new one via `npm run db:generate`.
-
----
-
-## Code Quality
-
-Before opening a pull request, make sure these all pass:
-
+To add the key to EAS:
 ```bash
-npm run typecheck   # must be clean (zero errors)
-npm run lint        # must be clean (zero errors)
+eas secret:create --scope project --name GOOGLE_MAPS_ANDROID_KEY --value <your-key>
 ```
 
-Format your code before committing:
-
-```bash
-npm run format
+For local development, create a `.env` file at the project root (it is gitignored):
+```
+GOOGLE_MAPS_ANDROID_KEY=your_key_here
 ```
 
-**A few conventions to follow:**
+---
 
-- Screen-local components go inside the screen's own folder (`src/screens/yourscreen/components/`). Cross-screen components go in `src/components/`.
-- `src/game/` is pure TypeScript — no React imports, no SQLite. This keeps the game logic unit-testable without a device or simulator.
-- All hardcoded UI strings must go in `src/i18n/en.ts` (not inline in JSX). This makes adding Traditional Chinese (zh-TW) easier later.
-- Do not call database repositories directly from screen components. Go through a Zustand store or a custom hook.
+## Known Limitations
+
+- **Offline banner requires a dev client rebuild** after `@react-native-community/netinfo` is installed. If the banner does not appear, rebuild the dev client.
+- **AR image markers use placeholder images.** The `markerAlpha`, `markerBeta`, and `markerGamma` targets in `arResources.ts` point to placeholder PNGs. Camera scanning will not trigger recognition events until real images are substituted.
+- **Equipment shop items have no images.** `ShopItemCard.tsx` renders a placeholder view for all items because no equipment sprites have been delivered yet.
+- **Analytics provider is a stub.** `src/services/analytics.ts` exports a no-op `analytics.track()`. The provider will be chosen and wired up in Phase 7.
+- **No backend sync.** All data is local. A user-triggered sync mechanism is planned but not implemented.
+
+---
+
+## Further Reading
+
+| Document | Contents |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Data flow, layer rules, navigation structure, state management, key design decisions |
+| [docs/customization.md](docs/customization.md) | Game balance tuning, UI theme, text copy, notifications — the "change things quickly" guide |
+| [docs/assets.md](docs/assets.md) | Complete art handoff checklist with exact specs and wiring instructions |
+| [docs/dev-workflow.md](docs/dev-workflow.md) | Day-to-day developer guide: environment setup, common tasks, error reference |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines and code review checklist |

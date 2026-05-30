@@ -6,20 +6,35 @@ PawStep uses `expo-sqlite` for all local persistence, with Drizzle ORM for type-
 
 ## Opening the database
 
-`src/db/client.ts` opens the database synchronously and exports a typed Drizzle instance:
+`src/db/client.ts` uses a lazy initialization pattern. The `db` export is a `Proxy` that delegates to a private `_db` variable which is `null` until `initDb()` is called:
 
 ```ts
-import { drizzle } from 'drizzle-orm/expo-sqlite';
-import { openDatabaseSync } from 'expo-sqlite';
-import * as schema from './schema';
+// Lazily initialized — opened inside initDb() so module evaluation never throws.
+let _db: ExpoSQLiteDatabase<typeof schema> | null = null;
 
-const expo = openDatabaseSync('pawstep.db', { enableChangeListener: true });
-export const db = drizzle(expo, { schema });
+export function getDb(): ExpoSQLiteDatabase<typeof schema> {
+  if (!_db) throw new Error('getDb() called before initDb()');
+  return _db;
+}
+
+// Proxy so existing `import { db }` call sites keep working.
+export const db: ExpoSQLiteDatabase<typeof schema> = new Proxy(
+  {} as ExpoSQLiteDatabase<typeof schema>,
+  {
+    get(_target, prop) {
+      return getDb()[prop as keyof ExpoSQLiteDatabase<typeof schema>];
+    },
+  },
+);
 ```
 
-`db` is a module-level constant — import it directly wherever you need database access. There is no async singleton and no `getDb()` call needed.
+Import `db` from `@/db/client` wherever you need database access. Do not call `openDatabaseSync` directly.
 
-`enableChangeListener` allows Drizzle to reactively re-run live queries when the underlying data changes.
+`enableChangeListener: true` (set in `initDb()`) allows Drizzle to reactively re-run live queries when the underlying data changes.
+
+**Important:** `initDb()` must be awaited in `App.tsx` before any repository function runs. Calling a repository before `initDb()` completes will throw `"getDb() called before initDb()"`.
+
+`initDb()` also seeds a default pet row if none exists (the `seedDefaultPet()` function), so the Home screen always has something to display on first launch.
 
 ---
 
@@ -27,36 +42,53 @@ export const db = drizzle(expo, { schema });
 
 ### How migrations run
 
-`src/db/client.ts` also exports `initDb()`, which applies any pending migrations on app start:
+`src/db/client.ts` exports `initDb()`, which applies pending migrations on app start:
 
 ```ts
 import { migrate } from 'drizzle-orm/expo-sqlite/migrator';
 import journal from './drizzle/meta/_journal.json';
-import m0000 from './drizzle/0000_third_brother_voodoo.sql';
+import { m0000 } from './migrations';
 
 const migrationFiles: Record<string, string> = {
-  '0000_third_brother_voodoo': m0000,
+  m0000,
 };
 
 export async function initDb(): Promise<void> {
-  await migrate(db, { journal, migrations: migrationFiles });
+  const expo = openDatabaseSync('pawstep.db', { enableChangeListener: true });
+  _db = drizzle(expo, { schema });
+  await migrate(_db, { journal, migrations: migrationFiles });
+  await seedDefaultPet();
 }
 ```
 
-Call `initDb()` once during app startup (before any repository is used). Drizzle tracks which migrations have already been applied internally — `initDb()` is a no-op if everything is up to date.
+`initDb()` is a no-op for migrations that have already been applied — Drizzle tracks applied migrations internally.
 
 ### How `.sql` files are bundled
 
-Migration files live in `src/db/drizzle/`. Metro cannot bundle `.sql` files natively, so `babel-plugin-inline-import` rewrites each `import m0000 from './drizzle/0000_....sql'` into a string constant at build time. The `babel.config.js` entry for this plugin covers the `src/db/drizzle/` path.
+Metro cannot bundle `.sql` files natively. `babel-plugin-inline-import` (in `devDependencies`) does not work correctly with Metro's module system.
+
+The actual solution: `npm run db:generate` runs Drizzle Kit and then `scripts/bundle-migrations.mjs`. The script reads each generated `.sql` file and writes its content as a TypeScript string export to `src/db/migrations.ts`. `client.ts` imports from `migrations.ts`, not from `.sql` files directly.
+
+The migration key format is `m0000`, `m0001`, etc. — not the Drizzle-generated tag name (e.g. `'0000_third_brother_voodoo'`).
 
 ### Adding a new migration
 
 1. Edit `src/db/schema.ts` — add or modify table definitions.
-2. Run `npm run db:generate`. Drizzle Kit reads the schema diff and writes a new `.sql` file into `src/db/drizzle/` and updates `src/db/drizzle/meta/_journal.json`.
-3. Open `src/db/client.ts` and add two lines:
-   - An import for the new `.sql` file (e.g. `import m0001 from './drizzle/0001_your_migration.sql';`)
-   - An entry in `migrationFiles` mapping the tag (from the journal) to the imported string.
-4. Never modify or delete an existing migration file. Users who already have the app installed have already run those migrations. Changing an old file creates a split between existing and new installs that cannot be reconciled without a destructive reset.
+2. Run:
+   ```bash
+   npm run db:generate
+   ```
+   Drizzle Kit writes a new `.sql` file to `src/db/drizzle/`, updates `_journal.json`, and `bundle-migrations.mjs` automatically rewrites `src/db/migrations.ts` to include the new export.
+3. Open `src/db/client.ts` and add the new export to `migrationFiles`:
+   ```ts
+   import { m0000, m0001 } from './migrations';
+
+   const migrationFiles: Record<string, string> = {
+     m0000,
+     m0001,  // ← add
+   };
+   ```
+4. Never modify or delete an existing migration file. Users who already have the app installed have already run those migrations.
 
 ---
 

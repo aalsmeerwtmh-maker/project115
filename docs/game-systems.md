@@ -220,17 +220,14 @@ Events are created with `resolved = 0`. After the user dismisses or completes th
 
 ---
 
-## Not yet implemented
+## Pending (Phase 7)
 
-The following game systems are described in `dev_plan.md` but are not yet implemented:
+All game systems described in this document are implemented as of Phase 6. The following items remain for Phase 7 (release prep):
 
-| System                                 | Phase   |
-| -------------------------------------- | ------- |
-| Full `growthFormula.ts` implementation | Phase 1 |
-| `streaks.ts` multiplier logic          | Phase 1 |
-| `tokens.ts` earn/spend rules           | Phase 5 |
-| `bosses.ts` challenge definitions      | Phase 5 |
-| Equipment shop                         | Phase 5 |
-| IAP token bundles                      | Phase 5 |
-| Story event scripting                  | Phase 5 |
-| Image-marker AR events                 | Phase 4 |
+| Item | Notes |
+|---|---|
+| Analytics provider | `src/services/analytics.ts` is a no-op stub; provider to be chosen in Phase 7 |
+| Real AR image markers | `assets/ar/markers/` contains placeholder PNGs; real markers must be substituted before demo |
+| Equipment sprites | `assets/equipment/` does not exist yet; `ShopItemCard.tsx` renders a placeholder view |
+| 3D pet model | `assets/ar/pet.glb` not yet delivered; AR shows a placeholder orange sphere |
+| Store submission | EAS Submit not yet run for either platform |

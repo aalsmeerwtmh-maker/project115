@@ -5,6 +5,7 @@ import { OnboardingScreen } from '@/screens/onboarding/OnboardingScreen';
 import { ARWalkScreen } from '@/screens/walks/ARWalkScreen';
 import { BossScreen } from '@/screens/boss/BossScreen';
 import { ShopScreen } from '@/screens/shop/ShopScreen';
+import { ExplorationMapScreen } from '@/screens/walks/ExplorationMapScreen';
 import type { RootStackParamList } from './types';
 
 // The root navigator is a native stack that sits above the tab bar.
@@ -14,14 +15,21 @@ import type { RootStackParamList } from './types';
 //   RootStack
 //   ├── Onboarding   (shown on first launch, then never again)
 //   ├── Main         (the four-tab layout — see BottomTabs)
-//   └── ARWalk       (full-screen modal, launched from the Walks tab)
+//   ├── ARWalk       (full-screen modal, launched from the Walks tab)
+//   ├── Boss         (full-screen boss challenge list)
+//   ├── Shop         (equipment shop)
+//   └── ExplorationMap (full-screen map of visited cells)
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export function RootNavigator() {
+interface RootNavigatorProps {
+  initialRoute?: 'Onboarding' | 'Main';
+}
+
+export function RootNavigator({ initialRoute = 'Main' }: RootNavigatorProps) {
   return (
     <NavigationContainer>
-      <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
         <Stack.Screen name="Onboarding" component={OnboardingScreen} />
         <Stack.Screen name="Main" component={BottomTabs} />
         {/* ARWalk slides up over the tabs as a full-screen camera view */}
@@ -32,6 +40,7 @@ export function RootNavigator() {
         />
         <Stack.Screen name="Boss" component={BossScreen} />
         <Stack.Screen name="Shop" component={ShopScreen} />
+        <Stack.Screen name="ExplorationMap" component={ExplorationMapScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

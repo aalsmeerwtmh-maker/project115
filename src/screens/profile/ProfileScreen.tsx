@@ -1,51 +1,100 @@
-import { View, Text, StyleSheet, ScrollView, Switch } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Switch, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePetStore } from '@/stores/petStore';
-import { useSettingsStore, DAILY_GOAL_STOPS } from '@/stores/settingsStore';
-import type { DailyGoal } from '@/stores/settingsStore';
+import { useSettingsStore } from '@/stores/settingsStore';
+import type { Locale } from '@/stores/settingsStore';
 import { PetAvatar } from '@/components/PetAvatar';
-import { PrimaryButton } from '@/components/PrimaryButton';
+import { GoalStepper, useGoalStepperHandlers } from '@/components/GoalStepper';
+import { scheduleDailyWalkReminder, cancelDailyWalkReminder } from '@/services/notifications';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
+
+// Hours 0–23 for the quiet-hours stepper.
+const HOUR_MIN = 0;
+const HOUR_MAX = 23;
 
 export function ProfileScreen() {
   const activePet = usePetStore((s) => s.activePet);
   const notificationsEnabled = useSettingsStore((s) => s.notificationsEnabled);
-  const dailyGoal = useSettingsStore((s) => s.dailyGoal);
+  const quietHoursStart = useSettingsStore((s) => s.quietHoursStart);
+  const quietHoursEnd = useSettingsStore((s) => s.quietHoursEnd);
+  const locale = useSettingsStore((s) => s.locale);
   const setNotificationsEnabled = useSettingsStore((s) => s.setNotificationsEnabled);
-  const setDailyGoal = useSettingsStore((s) => s.setDailyGoal);
+  const setQuietHoursStart = useSettingsStore((s) => s.setQuietHoursStart);
+  const setQuietHoursEnd = useSettingsStore((s) => s.setQuietHoursEnd);
+  const setLocale = useSettingsStore((s) => s.setLocale);
 
-  const currentGoalIndex = DAILY_GOAL_STOPS.indexOf(dailyGoal as DailyGoal);
+  const { dailyGoal, decreaseGoal, increaseGoal } = useGoalStepperHandlers();
 
-  function decreaseGoal() {
-    const prev = DAILY_GOAL_STOPS[currentGoalIndex - 1];
-    if (prev !== undefined) setDailyGoal(prev);
+  async function handleNotificationsToggle(enabled: boolean) {
+    await setNotificationsEnabled(enabled);
+    if (enabled) {
+      await scheduleDailyWalkReminder(quietHoursStart, quietHoursEnd);
+    } else {
+      await cancelDailyWalkReminder();
+    }
   }
 
-  function increaseGoal() {
-    const next = DAILY_GOAL_STOPS[currentGoalIndex + 1];
-    if (next !== undefined) setDailyGoal(next);
+  async function handleQuietStartDecrease() {
+    const next = Math.max(HOUR_MIN, quietHoursStart - 1);
+    await setQuietHoursStart(next);
+    if (notificationsEnabled) {
+      await scheduleDailyWalkReminder(next, quietHoursEnd);
+    }
+  }
+
+  async function handleQuietStartIncrease() {
+    const next = Math.min(HOUR_MAX, quietHoursStart + 1);
+    await setQuietHoursStart(next);
+    if (notificationsEnabled) {
+      await scheduleDailyWalkReminder(next, quietHoursEnd);
+    }
+  }
+
+  async function handleQuietEndDecrease() {
+    const next = Math.max(HOUR_MIN, quietHoursEnd - 1);
+    await setQuietHoursEnd(next);
+    if (notificationsEnabled) {
+      await scheduleDailyWalkReminder(quietHoursStart, next);
+    }
+  }
+
+  async function handleQuietEndIncrease() {
+    const next = Math.min(HOUR_MAX, quietHoursEnd + 1);
+    await setQuietHoursEnd(next);
+    if (notificationsEnabled) {
+      await scheduleDailyWalkReminder(quietHoursStart, next);
+    }
+  }
+
+  function formatHour(h: number): string {
+    return `${String(h).padStart(2, '0')}:00`;
   }
 
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <Text style={styles.heading}>{en.profile.title}</Text>
+        <Text style={styles.heading}>{t.profile.title}</Text>
 
         {/* Pet roster */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{en.profile.petsSection}</Text>
+          <Text style={styles.sectionTitle}>{t.profile.petsSection}</Text>
           {activePet ? (
             <View style={styles.petRow}>
-              <PetAvatar species={activePet.species} name={activePet.name} size={72} />
+              <PetAvatar
+                species={activePet.species}
+                name={activePet.name}
+                mood={activePet.mood}
+                size={72}
+              />
               <View style={styles.petInfo}>
                 <Text style={styles.petName}>{activePet.name}</Text>
                 <Text style={styles.petMeta}>
                   {activePet.species.charAt(0).toUpperCase() + activePet.species.slice(1)}
                   {'  ·  '}
-                  {en.profile.petStage(activePet.stage)}
+                  {t.profile.petStage(activePet.stage)}
                 </Text>
                 <Text style={styles.petGrowth}>
                   Growth: {activePet.growthValue.toFixed(1)} / 100
@@ -59,53 +108,109 @@ export function ProfileScreen() {
 
         {/* Settings */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{en.profile.settingsSection}</Text>
+          <Text style={styles.sectionTitle}>{t.profile.settingsSection}</Text>
 
+          {/* Notifications toggle */}
           <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>{en.profile.notificationsLabel}</Text>
+            <Text style={styles.settingLabel}>{t.profile.notificationsLabel}</Text>
             <Switch
               value={notificationsEnabled}
-              onValueChange={(v) => setNotificationsEnabled(v)}
+              onValueChange={(v) => void handleNotificationsToggle(v)}
               trackColor={{ false: colors.border, true: colors.primary }}
               thumbColor={colors.surface}
+              accessibilityLabel={t.profile.notificationsLabel}
+              accessibilityRole="switch"
             />
           </View>
 
+          {/* Quiet hours */}
           <View style={styles.divider} />
+          <Text style={styles.settingLabel}>{t.profile.quietHoursLabel}</Text>
+          <View style={styles.quietHoursRow}>
+            <Text style={styles.quietHoursSubLabel}>{t.profile.quietHoursStart}</Text>
+            <TouchableOpacity
+              style={styles.hourButton}
+              onPress={() => void handleQuietStartDecrease()}
+              accessibilityLabel="Decrease quiet hours start"
+            >
+              <Text style={styles.hourButtonText}>-</Text>
+            </TouchableOpacity>
+            <Text style={styles.hourValue}>{formatHour(quietHoursStart)}</Text>
+            <TouchableOpacity
+              style={styles.hourButton}
+              onPress={() => void handleQuietStartIncrease()}
+              accessibilityLabel="Increase quiet hours start"
+            >
+              <Text style={styles.hourButtonText}>+</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.quietHoursRow}>
+            <Text style={styles.quietHoursSubLabel}>{t.profile.quietHoursEnd}</Text>
+            <TouchableOpacity
+              style={styles.hourButton}
+              onPress={() => void handleQuietEndDecrease()}
+              accessibilityLabel="Decrease quiet hours end"
+            >
+              <Text style={styles.hourButtonText}>-</Text>
+            </TouchableOpacity>
+            <Text style={styles.hourValue}>{formatHour(quietHoursEnd)}</Text>
+            <TouchableOpacity
+              style={styles.hourButton}
+              onPress={() => void handleQuietEndIncrease()}
+              accessibilityLabel="Increase quiet hours end"
+            >
+              <Text style={styles.hourButtonText}>+</Text>
+            </TouchableOpacity>
+          </View>
 
+          {/* Daily goal */}
+          <View style={styles.divider} />
+          <GoalStepper dailyGoal={dailyGoal} onDecrease={decreaseGoal} onIncrease={increaseGoal} />
+
+          {/* Language */}
+          <View style={styles.divider} />
           <View style={styles.settingRow}>
-            <Text style={styles.settingLabel}>{en.profile.dailyGoalLabel}</Text>
-            <Text style={styles.goalValue}>{dailyGoal.toLocaleString()}</Text>
-          </View>
-
-          <View style={styles.goalSliderRow}>
-            <PrimaryButton label="-" onPress={decreaseGoal} disabled={currentGoalIndex <= 0} />
-            <View style={styles.goalStops}>
-              {DAILY_GOAL_STOPS.map((stop) => (
-                <View
-                  key={stop}
-                  style={[styles.goalStop, stop === dailyGoal && styles.goalStopActive]}
-                />
-              ))}
+            <Text style={styles.settingLabel}>{t.profile.localeLabel}</Text>
+            <View style={styles.localeRow}>
+              <TouchableOpacity
+                style={[styles.localeButton, locale === 'en' && styles.localeButtonActive]}
+                onPress={() => void setLocale('en' as Locale)}
+                accessibilityLabel="Switch to English"
+                accessibilityRole="button"
+              >
+                <Text
+                  style={[
+                    styles.localeButtonText,
+                    locale === 'en' && styles.localeButtonTextActive,
+                  ]}
+                >
+                  {t.profile.localeEn}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.localeButton, locale === 'zh-TW' && styles.localeButtonActive]}
+                onPress={() => void setLocale('zh-TW' as Locale)}
+                accessibilityLabel="Switch to Traditional Chinese"
+                accessibilityRole="button"
+              >
+                <Text
+                  style={[
+                    styles.localeButtonText,
+                    locale === 'zh-TW' && styles.localeButtonTextActive,
+                  ]}
+                >
+                  {t.profile.localeZhTw}
+                </Text>
+              </TouchableOpacity>
             </View>
-            <PrimaryButton
-              label="+"
-              onPress={increaseGoal}
-              disabled={currentGoalIndex >= DAILY_GOAL_STOPS.length - 1}
-            />
           </View>
-
-          <Text style={styles.goalRange}>
-            {DAILY_GOAL_STOPS[0]?.toLocaleString()} –{' '}
-            {DAILY_GOAL_STOPS[DAILY_GOAL_STOPS.length - 1]?.toLocaleString()} steps
-          </Text>
         </View>
 
         {/* About */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{en.profile.aboutSection}</Text>
-          <Text style={styles.aboutName}>{en.profile.appName}</Text>
-          <Text style={styles.aboutVersion}>Version {en.profile.appVersion}</Text>
+          <Text style={styles.sectionTitle}>{t.profile.aboutSection}</Text>
+          <Text style={styles.aboutName}>{t.profile.appName}</Text>
+          <Text style={styles.aboutVersion}>Version {t.profile.appVersion}</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -176,44 +281,65 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textPrimary,
   },
-  goalValue: {
-    ...typography.bodyBold,
-    color: colors.primary,
-  },
   divider: {
     height: 1,
     backgroundColor: colors.border,
     marginVertical: spacing.sm,
   },
-  goalSliderRow: {
+  quietHoursRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.sm,
+    paddingVertical: spacing.xs,
     gap: spacing.sm,
   },
-  goalStops: {
-    flex: 1,
-    flexDirection: 'row',
+  quietHoursSubLabel: {
+    ...typography.label,
+    color: colors.textSecondary,
+    width: 40,
+  },
+  hourButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.surfaceAlt,
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  hourButtonText: {
+    ...typography.bodyBold,
+    color: colors.textPrimary,
+  },
+  hourValue: {
+    ...typography.bodyBold,
+    color: colors.primary,
+    minWidth: 56,
+    textAlign: 'center',
+  },
+  localeRow: {
+    flexDirection: 'row',
     gap: spacing.xs,
   },
-  goalStop: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.border,
+  localeButton: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceAlt,
   },
-  goalStopActive: {
+  localeButtonActive: {
     backgroundColor: colors.primary,
-    transform: [{ scale: 1.4 }],
+    borderColor: colors.primary,
   },
-  goalRange: {
-    ...typography.caption,
-    color: colors.textDisabled,
-    textAlign: 'center',
-    marginTop: spacing.sm,
+  localeButtonText: {
+    ...typography.label,
+    color: colors.textSecondary,
+  },
+  localeButtonTextActive: {
+    color: colors.surface,
+    fontWeight: '600',
   },
   aboutName: {
     ...typography.bodyBold,

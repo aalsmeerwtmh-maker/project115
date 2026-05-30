@@ -38,11 +38,19 @@ export interface TokenEarnRates {
   timeInAppPerMinute: number; // tokens per minute of active app use (walk session active)
 }
 
+export interface WalkEvents {
+  /** How often a random walk event fires, in minutes. */
+  intervalMinutes: number;
+  /** Pet-perspective dialogue snippets shown during a walk. These are game content strings, not i18n keys. */
+  dialogues: string[];
+}
+
 export interface GameConfig {
   bosses: BossDefinition[];
   equipment: EquipmentItem[];
   iapBundles: IapBundle[];
   tokenEarnRates: TokenEarnRates;
+  walkEvents: WalkEvents;
 }
 
 export const GAME_CONFIG: GameConfig = {
@@ -67,7 +75,7 @@ export const GAME_CONFIG: GameConfig = {
       tokenReward: 30,
       retryBlockHours: 12,
       dialogues: [
-        'We did it! Mudpaw won\'t be bothering the park squirrels anymore.',
+        "We did it! Mudpaw won't be bothering the park squirrels anymore.",
         'Ha! That rascal never saw my finishing move coming.',
         'First win! My paws are shaking but my heart is full.',
       ],
@@ -104,7 +112,7 @@ export const GAME_CONFIG: GameConfig = {
       retryBlockHours: 24,
       dialogues: [
         "The Titan fell. I still can't believe it. We actually did it.",
-        "Ironmaw hit the ground and I just kept running. Two weeks of training paid off.",
+        'Ironmaw hit the ground and I just kept running. Two weeks of training paid off.',
         'The mountain pass is open. Wherever we go next, we go together.',
       ],
     },
@@ -131,7 +139,7 @@ export const GAME_CONFIG: GameConfig = {
       name: 'Voidstrider the Eternal',
       description: 'An ancient force who has watched civilisations rise and fall from the void.',
       villainLine:
-        "I have outlasted empires. A month of morning jogs will not impress me. Impress me anyway.",
+        'I have outlasted empires. A month of morning jogs will not impress me. Impress me anyway.',
       requiredStreakDays: 30,
       requiredGrowthValue: 90,
       requiredStage: 'elder',
@@ -222,4 +230,18 @@ export const GAME_CONFIG: GameConfig = {
       displayPrice: '$4.99',
     },
   ],
+
+  walkEvents: {
+    intervalMinutes: 10,
+    dialogues: [
+      "Oh! That puddle smelled incredible. I'm adding it to my mental map.",
+      'Every step we take together makes my paws a little stronger.',
+      'Did you see that squirrel? It waved. I waved back. We have an understanding.',
+      "The air is different here. Fresher, maybe. Or maybe I'm just happy.",
+      'I found a really great stick. I left it behind. The world deserves to enjoy it.',
+      'This is my favourite part of the walk — the part where we just keep going.',
+      "I'm pretty sure I can see farther when I'm walking with you.",
+      "Something moved in those bushes. I've decided it was friendly.",
+    ],
+  },
 };

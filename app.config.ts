@@ -19,6 +19,8 @@ export default ({ config }: ConfigContext): any => ({
   ios: {
     bundleIdentifier: IS_DEV ? 'com.pawstep.app.dev' : 'com.pawstep.app',
     supportsTablet: false,
+    // PLACEHOLDER: replace the numeric App Store ID once the app is created in App Store Connect.
+    appStoreUrl: 'https://apps.apple.com/app/pawstep/idPLACEHOLDER',
     infoPlist: {
       NSCameraUsageDescription:
         'PawStep uses the camera so your pet can appear in the world around you in AR.',
@@ -29,6 +31,18 @@ export default ({ config }: ConfigContext): any => ({
       NSMotionUsageDescription: 'PawStep uses motion data to count your steps and grow your pet.',
       UIBackgroundModes: ['location', 'fetch'],
     },
+    // iOS 17+ Privacy Manifests: required by App Store since Spring 2024.
+    // Expo's storage layer (AsyncStorage / expo-sqlite) accesses UserDefaults internally.
+    // NSPrivacyAccessedAPICategoryUserDefaults reason CA92.1:
+    //   "Access info from the same app that wrote the info" — covers Expo's own storage writes.
+    privacyManifests: {
+      NSPrivacyAccessedAPITypes: [
+        {
+          NSPrivacyAccessedAPIType: 'NSPrivacyAccessedAPICategoryUserDefaults',
+          NSPrivacyAccessedAPITypeReasons: ['CA92.1'],
+        },
+      ],
+    },
     config: {
       usesNonExemptEncryption: false,
     },
@@ -36,6 +50,7 @@ export default ({ config }: ConfigContext): any => ({
 
   android: {
     package: IS_DEV ? 'com.pawstep.app.dev' : 'com.pawstep.app',
+    playStoreUrl: 'https://play.google.com/store/apps/details?id=com.pawstep.app',
     adaptiveIcon: {
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundColor: '#FDF8E8',
@@ -88,5 +103,9 @@ export default ({ config }: ConfigContext): any => ({
     eas: {
       projectId: '6fe40df0-5b30-46fa-bf95-f564b867823d',
     },
+    // Sentry DSN is injected at build time via the SENTRY_DSN EAS secret.
+    // In local dev it defaults to an empty string (crash reporting inactive).
+    // Run: eas secret:create --name SENTRY_DSN --value <dsn> --scope project
+    sentryDsn: process.env.SENTRY_DSN ?? '',
   },
 });

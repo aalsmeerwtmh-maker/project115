@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Claude Code Transcript Viewer</title>
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface2: #1c2128;
+    --border: #30363d;
+    --accent: #f78166;
+    --accent2: #79c0ff;
+    --accent3: #7ee787;
+    --accent4: #d2a8ff;
+    --accent5: #ffa657;
+    --muted: #8b949e;
+    --text: #e6edf3;
+    --text-dim: #c9d1d9;
+    --user-bg: #161b22;
+    --user-border: #388bfd;
+    --claude-bg: #161b22;
+    --claude-border: #3fb950;
+    --tool-bg: #1c2128;
+    --tool-border: #30363d;
+    --meta-color: #6e7681;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', ui-monospace, monospace;
+    --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  /* ── Top bar ── */
+  #topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(13, 17, 23, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  #topbar h1 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent2);
+    font-family: var(--font-sans);
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+  }
+
+  #topbar .logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  #topbar .logo-icon {
+    width: 24px;
+    height: 24px;
+    background: linear-gradient(135deg, #f78166, #d2a8ff);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
+  #back-btn {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    text-decoration: none;
+    transition: border-color 0.15s, color 0.15s;
+    white-space: nowrap;
+  }
+  #back-btn:hover { border-color: var(--accent2); color: var(--accent2); }
+  #back-btn.visible { display: flex; }
+
+  #drop-area {
+    flex: 1;
+    min-width: 200px;
+    padding: 6px 12px;
+    background: var(--surface2);
+    border: 1px dashed var(--border);
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+    text-align: center;
+    user-select: none;
+  }
+
+  #drop-area:hover, #drop-area.drag-over {
+    border-color: var(--accent2);
+    color: var(--accent2);
+  }
+
+  #drop-area.has-file {
+    border-style: solid;
+    border-color: var(--accent3);
+    color: var(--accent3);
+  }
+
+  #file-input { display: none; }
+
+  #stats {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--font-sans);
+    white-space: nowrap;
+    display: flex;
+    gap: 12px;
+  }
+
+  #stats span { display: flex; align-items: center; gap: 4px; }
+  #stats .dot {
+    width: 6px; height: 6px; border-radius: 50%; display: inline-block;
+  }
+  #stats .dot-user { background: var(--user-border); }
+  #stats .dot-claude { background: var(--claude-border); }
+  #stats .dot-tool { background: var(--accent5); }
+
+  /* ── Layout ── */
+  #main {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 24px 20px 80px;
+  }
+
+  /* ── Browse view ── */
+  #browse-view { display: none; }
+
+  #browse-header {
+    margin-bottom: 24px;
+  }
+
+  #browse-header h2 {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--font-sans);
+    margin-bottom: 6px;
+  }
+
+  #browse-header p {
+    font-size: 12px;
+    color: var(--muted);
+    font-family: var(--font-sans);
+  }
+
+  #transcript-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .transcript-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    cursor: pointer;
+    text-decoration: none;
+    display: block;
+    transition: border-color 0.15s, background 0.15s;
+  }
+
+  .transcript-card:hover {
+    border-color: var(--accent2);
+    background: var(--surface2);
+  }
+
+  .transcript-card .card-date {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--font-sans);
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .transcript-card .card-date .date-badge {
+    background: rgba(121, 192, 255, 0.12);
+    color: var(--accent2);
+    border-radius: 4px;
+    padding: 1px 7px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    font-family: var(--font-mono);
+  }
+
+  .transcript-card .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--font-sans);
+    margin-bottom: 4px;
+  }
+
+  .transcript-card .card-filename {
+    font-size: 11px;
+    color: var(--meta-color);
+    font-family: var(--font-mono);
+  }
+
+  .transcript-card .card-arrow {
+    float: right;
+    color: var(--muted);
+    font-size: 16px;
+    margin-top: -20px;
+    transition: color 0.15s, transform 0.15s;
+  }
+
+  .transcript-card:hover .card-arrow {
+    color: var(--accent2);
+    transform: translateX(3px);
+  }
+
+  /* Loading / error state */
+  #browse-status {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted);
+    font-family: var(--font-sans);
+    font-size: 13px;
+  }
+
+  #browse-status .status-icon { font-size: 32px; opacity: 0.3; margin-bottom: 12px; }
+  #browse-status .status-hint { font-size: 11px; opacity: 0.6; margin-top: 6px; }
+
+  /* ── Viewer view ── */
+  #viewer-view { display: none; }
+
+  /* ── Empty state ── */
+  #empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 80px 20px;
+    color: var(--muted);
+    text-align: center;
+    gap: 16px;
+  }
+
+  #empty .empty-icon {
+    font-size: 48px;
+    opacity: 0.3;
+  }
+
+  #empty p { font-family: var(--font-sans); font-size: 14px; }
+  #empty .hint { font-size: 12px; opacity: 0.6; }
+
+  /* ── Session header ── */
+  #session-header {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  #session-header .logo-ascii {
+    font-size: 11px;
+    line-height: 1.3;
+    color: var(--accent4);
+    white-space: pre;
+  }
+
+  #session-header .session-info {
+    flex: 1;
+    min-width: 180px;
+  }
+
+  #session-header .session-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text);
+    font-family: var(--font-sans);
+    margin-bottom: 4px;
+  }
+
+  #session-header .session-meta {
+    font-size: 11px;
+    color: var(--muted);
+    font-family: var(--font-sans);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  #session-header .session-meta span {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 1px 7px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .badge-model { background: rgba(209, 168, 255, 0.15); color: var(--accent4); }
+  .badge-dir { background: rgba(121, 192, 255, 0.15); color: var(--accent2); }
+
+  /* ── Messages ── */
+  .message {
+    margin-bottom: 16px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid transparent;
+    transition: border-color 0.15s;
+  }
+
+  .message:hover { border-color: var(--border); }
+
+  .msg-user { border-color: rgba(56, 139, 253, 0.25); }
+  .msg-user .msg-header {
+    background: rgba(56, 139, 253, 0.08);
+    border-bottom: 1px solid rgba(56, 139, 253, 0.15);
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .msg-user .msg-body { background: var(--surface); padding: 14px 16px; }
+
+  .msg-claude { border-color: rgba(63, 185, 80, 0.2); }
+  .msg-claude .msg-header {
+    background: rgba(63, 185, 80, 0.07);
+    border-bottom: 1px solid rgba(63, 185, 80, 0.12);
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .msg-claude .msg-body { background: var(--surface); padding: 14px 16px; }
+
+  .msg-tool {
+    border-color: rgba(255, 166, 87, 0.2);
+    margin-left: 24px;
+  }
+  .msg-tool .msg-header {
+    background: rgba(255, 166, 87, 0.07);
+    border-bottom: 1px solid rgba(255, 166, 87, 0.12);
+    padding: 6px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .msg-tool .msg-body { background: var(--surface2); padding: 12px 16px; }
+
+  .msg-meta {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px;
+    margin-bottom: 8px;
+    color: var(--meta-color);
+    font-size: 11px;
+  }
+
+  .msg-meta::before {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+    opacity: 0.4;
+  }
+
+  .msg-meta::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+    opacity: 0.4;
+  }
+
+  .msg-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-family: var(--font-sans);
+  }
+
+  .msg-user .msg-label { color: var(--user-border); }
+  .msg-claude .msg-label { color: var(--claude-border); }
+  .msg-tool .msg-label { color: var(--accent5); }
+
+  .msg-icon { font-size: 13px; line-height: 1; }
+
+  .msg-body pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.65;
+  }
+
+  .msg-body .code-inline {
+    background: rgba(255,255,255,0.06);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 12px;
+    color: var(--accent2);
+  }
+
+  .msg-body ul {
+    list-style: none;
+    padding-left: 16px;
+    margin: 6px 0;
+  }
+
+  .msg-body ul li::before {
+    content: '›';
+    color: var(--muted);
+    margin-right: 8px;
+    font-weight: 700;
+  }
+
+  .ascii-table {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    overflow-x: auto;
+    margin: 8px 0;
+    font-size: 12px;
+    color: var(--accent3);
+    white-space: pre;
+    font-family: var(--font-mono);
+  }
+
+  .tool-output {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 6px 0;
+    font-size: 12px;
+    color: var(--muted);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+  }
+
+  .path-token {
+    color: var(--accent5);
+    background: rgba(255, 166, 87, 0.1);
+    border-radius: 3px;
+    padding: 0 4px;
+    font-size: 12px;
+  }
+
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  #jump-top {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 36px;
+    height: 36px;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--muted);
+    font-size: 16px;
+    opacity: 0;
+    transition: opacity 0.2s, border-color 0.15s, color 0.15s;
+    user-select: none;
+  }
+
+  #jump-top:hover { border-color: var(--accent2); color: var(--accent2); }
+  #jump-top.visible { opacity: 1; }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="logo">
+    <div class="logo-icon">⬡</div>
+    <h1>Claude Code Transcript</h1>
+  </div>
+  <a id="back-btn" href="transcript-viewer.html">← All Transcripts</a>
+  <div id="drop-area" onclick="document.getElementById('file-input').click()">
+    Drop a .txt transcript here, or click to open
+  </div>
+  <input type="file" id="file-input" accept=".txt,.log" />
+  <div id="stats" style="display:none">
+    <span><span class="dot dot-user"></span><span id="stat-user">0</span> user</span>
+    <span><span class="dot dot-claude"></span><span id="stat-claude">0</span> claude</span>
+    <span><span class="dot dot-tool"></span><span id="stat-tool">0</span> tool</span>
+  </div>
+</div>
+
+<div id="main">
+
+  <!-- Browse view: shown when no ?file= param -->
+  <div id="browse-view">
+    <div id="browse-header">
+      <h2>Available Transcripts</h2>
+      <p>Select a session to view it</p>
+    </div>
+    <div id="transcript-list">
+      <div id="browse-status">
+        <div class="status-icon">⬡</div>
+        <div>Loading transcripts…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Viewer view: shown when ?file= param present or file dropped locally -->
+  <div id="viewer-view">
+    <div id="empty">
+      <div class="empty-icon">⬡</div>
+      <p>No transcript loaded</p>
+      <p class="hint">Drop a Claude Code .txt transcript file above to render it.</p>
+    </div>
+    <div id="transcript" style="display:none"></div>
+  </div>
+
+</div>
+
+<div id="jump-top" title="Back to top">↑</div>
+
+<script>
+// ─── Config ────────────────────────────────────────────────────────────────
+const REPO   = 'aalsmeerwtmh-maker/project115';
+const BRANCH = 'main';
+
+// ─── Mode detection ────────────────────────────────────────────────────────
+const params   = new URLSearchParams(location.search);
+const fileParam = params.get('file');
+
+const browseView = document.getElementById('browse-view');
+const viewerView = document.getElementById('viewer-view');
+const backBtn    = document.getElementById('back-btn');
+const dropArea   = document.getElementById('drop-area');
+
+if (fileParam) {
+  enterViewerMode();
+  fetchRemoteFile(fileParam);
+} else {
+  enterBrowseMode();
+  loadTranscriptList();
+}
+
+function enterBrowseMode() {
+  browseView.style.display = 'block';
+  viewerView.style.display = 'none';
+  backBtn.classList.remove('visible');
+  dropArea.style.display = 'block';
+}
+
+function enterViewerMode() {
+  browseView.style.display = 'none';
+  viewerView.style.display = 'block';
+  backBtn.classList.add('visible');
+  dropArea.style.display = 'none';
+}
+
+// ─── GitHub: list transcript files ─────────────────────────────────────────
+async function loadTranscriptList() {
+  const listEl = document.getElementById('transcript-list');
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/contents/transcript`, {
+      headers: { Accept: 'application/vnd.github.v3+json' }
+    });
+
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+
+    const files = await res.json();
+    const transcripts = files
+      .filter(f => f.type === 'file' && f.name.endsWith('.txt'))
+      .sort((a, b) => b.name.localeCompare(a.name)); // newest first
+
+    if (!transcripts.length) {
+      listEl.innerHTML = `
+        <div id="browse-status">
+          <div class="status-icon">⬡</div>
+          <div>No transcript files found in this repository.</div>
+          <div class="status-hint">Transcript files should end in .txt and live in the repo root.</div>
+        </div>`;
+      return;
+    }
+
+    listEl.innerHTML = transcripts.map(f => buildCard(f.name)).join('');
+
+  } catch (err) {
+    listEl.innerHTML = `
+      <div id="browse-status">
+        <div class="status-icon">⚠</div>
+        <div>Could not load transcript list.</div>
+        <div class="status-hint">${escHtml(err.message)} — you can still drag &amp; drop a local file above.</div>
+      </div>`;
+  }
+}
+
+// Parse filename like "2026-05-30-224959-what-to-do-next.txt"
+function parseFilename(name) {
+  const m = name.match(/^(\d{4}-\d{2}-\d{2})-(\d{2})(\d{2})(\d{2})-(.+)\.txt$/);
+  if (!m) return { date: null, time: null, title: name.replace(/\.txt$/, '') };
+  const date  = m[1];
+  const time  = `${m[2]}:${m[3]}:${m[4]}`;
+  const title = m[5].replace(/-/g, ' ');
+  return { date, time, title };
+}
+
+function buildCard(filename) {
+  const { date, time, title } = parseFilename(filename);
+  const href = `?file=${encodeURIComponent(filename)}`;
+
+  return `
+  <a class="transcript-card" href="${href}">
+    <div class="card-date">
+      ${date ? `<span class="date-badge">${date}</span>` : ''}
+      ${time ? `<span>${time}</span>` : ''}
+    </div>
+    <div class="card-title">${escHtml(title)}</div>
+    <div class="card-filename">${escHtml(filename)}</div>
+    <div class="card-arrow">›</div>
+  </a>`;
+}
+
+// ─── GitHub: fetch and render a single transcript ──────────────────────────
+async function fetchRemoteFile(filename) {
+  const url = `https://raw.githubusercontent.com/${REPO}/${BRANCH}/transcript/${encodeURIComponent(filename)}`;
+
+  // Show loading state
+  const tc = document.getElementById('transcript');
+  const empty = document.getElementById('empty');
+  empty.style.display = 'none';
+  tc.style.display = 'block';
+  tc.innerHTML = `<div style="text-align:center;padding:60px 20px;color:var(--muted);font-family:var(--font-sans)">Loading ${escHtml(filename)}…</div>`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status} — file not found or repo is private`);
+    const text = await res.text();
+    document.title = `${filename} · Transcript Viewer`;
+    render(text);
+    dropArea.textContent = filename;
+    dropArea.classList.add('has-file');
+    dropArea.style.display = 'block';
+  } catch (err) {
+    tc.innerHTML = `
+      <div style="text-align:center;padding:60px 20px;color:var(--muted);font-family:var(--font-sans)">
+        <div style="font-size:32px;opacity:0.3;margin-bottom:12px">⚠</div>
+        <div>Could not load <code style="color:var(--accent5)">${escHtml(filename)}</code></div>
+        <div style="font-size:11px;opacity:0.6;margin-top:6px">${escHtml(err.message)}</div>
+      </div>`;
+  }
+}
+
+// ─── Drag & drop / local file open ─────────────────────────────────────────
+const fileInput = document.getElementById('file-input');
+
+dropArea.addEventListener('dragover', e => { e.preventDefault(); dropArea.classList.add('drag-over'); });
+dropArea.addEventListener('dragleave', () => dropArea.classList.remove('drag-over'));
+dropArea.addEventListener('drop', e => {
+  e.preventDefault();
+  dropArea.classList.remove('drag-over');
+  const file = e.dataTransfer.files[0];
+  if (file) loadLocalFile(file);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files[0]) loadLocalFile(fileInput.files[0]);
+});
+
+function loadLocalFile(file) {
+  const reader = new FileReader();
+  reader.onload = e => {
+    enterViewerMode();
+    dropArea.textContent = file.name;
+    dropArea.classList.add('has-file');
+    dropArea.style.display = 'block';
+    render(e.target.result);
+  };
+  reader.readAsText(file);
+}
+
+// ─── Scroll-to-top button ──────────────────────────────────────────────────
+const jumpTop = document.getElementById('jump-top');
+window.addEventListener('scroll', () => {
+  jumpTop.classList.toggle('visible', window.scrollY > 300);
+});
+jumpTop.addEventListener('click', () => window.scrollTo({ top: 0, behavior: 'smooth' }));
+
+// ─── Parsing ───────────────────────────────────────────────────────────────
+
+function parseTranscript(text) {
+  const raw = text.split('\n');
+  const chunks = [];
+  let current = null;
+
+  function flush() {
+    if (current) { chunks.push(current); current = null; }
+  }
+
+  let headerLines = [];
+  let i = 0;
+  while (i < raw.length && !raw[i].trimStart().startsWith('❯')) {
+    headerLines.push(raw[i]);
+    i++;
+  }
+
+  if (headerLines.length) {
+    chunks.push({ type: 'header', lines: headerLines });
+  }
+
+  for (; i < raw.length; i++) {
+    const line = raw[i];
+    const stripped = line.trimStart();
+
+    if (stripped.startsWith('❯ ') || stripped === '❯') {
+      flush();
+      current = { type: 'user', lines: [line] };
+      continue;
+    }
+
+    if (stripped.startsWith('● ') || stripped === '●') {
+      if (current && current.type === 'user') flush();
+      if (current && current.type === 'claude') {
+        current.lines.push(line);
+        continue;
+      }
+      flush();
+      current = { type: 'claude', lines: [line] };
+      continue;
+    }
+
+    if (stripped.startsWith('✻ ')) {
+      flush();
+      chunks.push({ type: 'meta', lines: [line] });
+      continue;
+    }
+
+    if (current) {
+      current.lines.push(line);
+    } else {
+      current = { type: 'claude', lines: [line] };
+    }
+  }
+
+  flush();
+  return chunks;
+}
+
+// ─── Rendering helpers ─────────────────────────────────────────────────────
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function highlightPaths(s) {
+  return s.replace(/((?:src|app|scripts|assets|patches|node_modules)\/[\w./-]+)/g,
+    '<span class="path-token">$1</span>');
+}
+
+function highlightInlineCode(s) {
+  return s.replace(/`([^`]+)`/g, '<span class="code-inline">$1</span>');
+}
+
+function applyInlineMarkup(s) {
+  return highlightPaths(highlightInlineCode(s));
+}
+
+function renderBodyLines(lines) {
+  const isTableLine = l => /[┌┐└┘├┤┬┴┼│─]/.test(l) || /^\s*[|+]/.test(l);
+  let html = '';
+  let buf = [];
+  let inTable = false;
+  let inToolOutput = false;
+
+  const flushBuf = () => {
+    if (!buf.length) return;
+    if (inTable) {
+      html += `<div class="ascii-table">${escHtml(buf.join('\n'))}</div>`;
+    } else if (inToolOutput) {
+      html += `<div class="tool-output">${escHtml(buf.join('\n'))}</div>`;
+    } else {
+      const text = buf.map(l => applyInlineMarkup(escHtml(l))).join('\n');
+      html += `<pre>${text}</pre>`;
+    }
+    buf = [];
+  };
+
+  for (const line of lines) {
+    const isTable   = isTableLine(line);
+    const isToolOut = /^\s+⎿ /.test(line);
+
+    if (isTable && !inTable)     { flushBuf(); inTable = true; }
+    if (!isTable && inTable)     { flushBuf(); inTable = false; }
+    if (isToolOut && !inToolOutput) { flushBuf(); inToolOutput = true; }
+    if (!isToolOut && inToolOutput && line.trim() !== '') { flushBuf(); inToolOutput = false; }
+
+    buf.push(line);
+  }
+  flushBuf();
+  return html;
+}
+
+// ─── Chunk → HTML ──────────────────────────────────────────────────────────
+
+function renderHeader(chunk) {
+  const text = chunk.lines.join('\n');
+  const versionMatch = text.match(/Claude Code ([\w.]+)/);
+  const modelMatch   = text.match(/((?:claude-)?(?:Sonnet|Haiku|Opus)[^·\n]*)/i);
+  const dirMatch     = text.match(/~\/[^\s\n]+/);
+
+  const version = versionMatch ? versionMatch[1] : '';
+  const model   = modelMatch   ? modelMatch[1].trim() : '';
+  const dir     = dirMatch     ? dirMatch[0] : '';
+
+  return `
+  <div id="session-header">
+    <div class="logo-ascii">▐▛███▜▌\n▝▜█████▛▘\n  ▘▘ ▝▝</div>
+    <div class="session-info">
+      <div class="session-title">Claude Code Session</div>
+      <div class="session-meta">
+        ${version ? `<span>v${version}</span>` : ''}
+        ${model   ? `<span><span class="badge badge-model">${escHtml(model)}</span></span>` : ''}
+        ${dir     ? `<span><span class="badge badge-dir">${escHtml(dir)}</span></span>` : ''}
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderUser(chunk) {
+  const allLines = chunk.lines.join('\n');
+  const body     = allLines.replace(/^[ \t]*❯[ \t]?/, '').trim();
+  return `
+  <div class="message msg-user">
+    <div class="msg-header">
+      <span class="msg-icon">❯</span>
+      <span class="msg-label">You</span>
+    </div>
+    <div class="msg-body">
+      <pre>${applyInlineMarkup(escHtml(body))}</pre>
+    </div>
+  </div>`;
+}
+
+function renderClaude(chunk) {
+  const bodyLines  = [];
+  const toolBlocks = [];
+  let currentTool  = null;
+
+  for (const line of chunk.lines) {
+    const stripped = line.trimStart();
+
+    const toolCallMatch = stripped.match(/^●[ \t]+([\w:-]+)\(([^)]*)\)/);
+    if (toolCallMatch && line !== chunk.lines[0]) {
+      if (currentTool) toolBlocks.push(currentTool);
+      currentTool = { name: toolCallMatch[1], args: toolCallMatch[2], lines: [line] };
+      continue;
+    }
+
+    if (stripped.startsWith('⎿ ') && currentTool) {
+      currentTool.lines.push(line);
+      continue;
+    }
+
+    if (currentTool && (stripped.startsWith('(ctrl') || stripped === '')) {
+      currentTool.lines.push(line);
+      continue;
+    }
+
+    if (currentTool) { toolBlocks.push(currentTool); currentTool = null; }
+    bodyLines.push(line);
+  }
+  if (currentTool) toolBlocks.push(currentTool);
+
+  if (bodyLines[0]) {
+    bodyLines[0] = bodyLines[0].replace(/^[ \t]*●[ \t]?/, '');
+  }
+
+  return `
+  <div class="message msg-claude">
+    <div class="msg-header">
+      <span class="msg-icon">⬡</span>
+      <span class="msg-label">Claude</span>
+    </div>
+    <div class="msg-body">
+      ${renderBodyLines(bodyLines)}
+      ${toolBlocks.map(renderTool).join('')}
+    </div>
+  </div>`;
+}
+
+function renderTool(tb) {
+  const resultLines = tb.lines.filter(l => /⎿ /.test(l));
+  const resultText  = resultLines
+    .map(l => l.replace(/^[ \t]*⎿[ \t]?/, ''))
+    .join('\n')
+    .trim();
+
+  const isDone = resultText.toLowerCase().includes('done');
+  const statusColor = isDone ? 'var(--accent3)' : 'var(--accent5)';
+
+  return `
+  <div class="message msg-tool">
+    <div class="msg-header">
+      <span class="msg-icon">⚙</span>
+      <span class="msg-label" style="color:${statusColor}">${escHtml(tb.name)}</span>
+      ${tb.args ? `<span style="color:var(--muted);font-size:11px">(${escHtml(tb.args)})</span>` : ''}
+    </div>
+    ${resultText ? `<div class="msg-body"><div class="tool-output">${escHtml(resultText)}</div></div>` : ''}
+  </div>`;
+}
+
+function renderMeta(chunk) {
+  const label = chunk.lines.join(' ').trim().replace(/^✻\s*/, '');
+  return `<div class="msg-meta">${escHtml(label)}</div>`;
+}
+
+// ─── Main render ───────────────────────────────────────────────────────────
+
+function render(text) {
+  const chunks = parseTranscript(text);
+  let userCount = 0, claudeCount = 0;
+  let html = '';
+
+  for (const chunk of chunks) {
+    switch (chunk.type) {
+      case 'header': html += renderHeader(chunk); break;
+      case 'user':   html += renderUser(chunk);   userCount++;   break;
+      case 'claude': html += renderClaude(chunk); claudeCount++; break;
+      case 'meta':   html += renderMeta(chunk);   break;
+    }
+  }
+
+  document.getElementById('empty').style.display = 'none';
+  const tc = document.getElementById('transcript');
+  tc.style.display = 'block';
+  tc.innerHTML = html;
+
+  document.getElementById('stat-user').textContent   = userCount;
+  document.getElementById('stat-claude').textContent = claudeCount;
+  document.getElementById('stats').style.display = 'flex';
+}
+</script>
+</body>
+</html>

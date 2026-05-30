@@ -1,9 +1,14 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useLocation, type Coords } from '@/hooks/useLocation';
 import { useProgressStore } from '@/stores/progressStore';
-import { insertExplorationEvent, insertCheckinEvent } from '@/db/repositories/events';
+import {
+  insertExplorationEvent,
+  insertCheckinEvent,
+  insertStoryEvent,
+} from '@/db/repositories/events';
 import { generateId } from '@/utils/id';
 import { checkinTokenAmount, timeInAppTokenAmount, TIME_IN_APP_DAILY_CAP } from '@/game/tokens';
+import { GAME_CONFIG } from '@/game/config';
 
 function haversineM(a: Coords, b: Coords): number {
   const R = 6_371_000;
@@ -43,6 +48,12 @@ export function formatElapsed(seconds: number): string {
   return `${padTwo(m)}:${padTwo(s)}`;
 }
 
+function pickRandomDialogue(): string {
+  const dialogues = GAME_CONFIG.walkEvents.dialogues;
+  const idx = Math.floor(Math.random() * dialogues.length);
+  return dialogues[idx] ?? dialogues[0] ?? '';
+}
+
 export interface UseWalkSessionReturn {
   isActive: boolean;
   elapsedSeconds: number;
@@ -53,9 +64,18 @@ export interface UseWalkSessionReturn {
   start: (stepBaseline: number) => Promise<void>;
   stop: (liveStepCount: number) => Promise<void>;
   notifySteps: (liveStepCount: number) => void;
+  /** Called each time the user enters a new geofence cell, with the tokens awarded. */
+  onNewCell?: (tokensAwarded: number) => void;
+  /** Called when a random walk event fires, with the dialogue string. */
+  onWalkEvent?: (dialogue: string) => void;
 }
 
-export function useWalkSession(): UseWalkSessionReturn {
+export interface UseWalkSessionOptions {
+  onNewCell?: (tokensAwarded: number) => void;
+  onWalkEvent?: (dialogue: string) => void;
+}
+
+export function useWalkSession(options?: UseWalkSessionOptions): UseWalkSessionReturn {
   const { startTracking, stopTracking, permissionStatus } = useLocation();
   const addTokens = useProgressStore((s) => s.addTokens);
   const timeInAppTokensToday = useProgressStore((s) => s.timeInAppTokensToday);
@@ -72,6 +92,15 @@ export function useWalkSession(): UseWalkSessionReturn {
   const visitedCellsRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const minuteTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const walkEventTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Stable refs for callbacks so the timers always see the latest values.
+  const onNewCellRef = useRef<((tokensAwarded: number) => void) | undefined>(options?.onNewCell);
+  const onWalkEventRef = useRef<((dialogue: string) => void) | undefined>(options?.onWalkEvent);
+  useEffect(() => {
+    onNewCellRef.current = options?.onNewCell;
+    onWalkEventRef.current = options?.onWalkEvent;
+  });
 
   // Keep a ref to the current daily token count so the minute timer callback
   // always sees the up-to-date value without needing it in the dependency array.
@@ -96,6 +125,8 @@ export function useWalkSession(): UseWalkSessionReturn {
           tokensAwarded: checkinTokens,
         });
         await addTokens(checkinTokens);
+        // Notify the walk screen so it can show the discovery toast.
+        onNewCellRef.current?.(checkinTokens);
       }
     },
     [addTokens],
@@ -134,6 +165,22 @@ export function useWalkSession(): UseWalkSessionReturn {
         }
       }, 60_000);
 
+      // Fire a random walk event every intervalMinutes minutes.
+      const intervalMs = GAME_CONFIG.walkEvents.intervalMinutes * 60_000;
+      walkEventTimerRef.current = setInterval(() => {
+        const dialogue = pickRandomDialogue();
+        onWalkEventRef.current?.(dialogue);
+        // Insert a story event for the random walk encounter.
+        const id = generateId();
+        insertStoryEvent(id, {
+          bossId: '',
+          dialogueLine: dialogue,
+          source: 'random_walk',
+        }).catch((err) => {
+          console.warn('[useWalkSession] walk event insert failed:', err);
+        });
+      }, intervalMs);
+
       await startTracking(handleNewCoords);
     },
     [startTracking, handleNewCoords, addTokens],
@@ -151,6 +198,11 @@ export function useWalkSession(): UseWalkSessionReturn {
       if (minuteTimerRef.current) {
         clearInterval(minuteTimerRef.current);
         minuteTimerRef.current = null;
+      }
+
+      if (walkEventTimerRef.current) {
+        clearInterval(walkEventTimerRef.current);
+        walkEventTimerRef.current = null;
       }
 
       const poly = polylineRef.current;
@@ -187,6 +239,7 @@ export function useWalkSession(): UseWalkSessionReturn {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (minuteTimerRef.current) clearInterval(minuteTimerRef.current);
+      if (walkEventTimerRef.current) clearInterval(walkEventTimerRef.current);
     };
   }, []);
 

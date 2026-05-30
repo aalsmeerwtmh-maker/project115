@@ -51,6 +51,14 @@ export async function insertCheckinEvent(
   await db.insert(events).values(row);
 }
 
+export async function getCheckinEvents(): Promise<Event[]> {
+  return db
+    .select()
+    .from(events)
+    .where(eq(events.type, 'checkin'))
+    .orderBy(desc(events.triggeredAt));
+}
+
 export async function getRecentWalkSessions(limit = 5): Promise<Event[]> {
   return db
     .select()
@@ -105,6 +113,8 @@ export async function insertBossEvent(
 export type StoryPayload = {
   bossId: string;
   dialogueLine: string;
+  /** Origin of the story event — 'boss' for boss victories, 'random_walk' for timed walk events. */
+  source?: 'boss' | 'random_walk';
 };
 
 export async function insertStoryEvent(id: string, payload: StoryPayload): Promise<void> {

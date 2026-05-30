@@ -13,6 +13,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
+import Animated, {
+  useSharedValue,
+  withRepeat,
+  withTiming,
+  useAnimatedStyle,
+} from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -25,6 +31,30 @@ import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 import { PetARScene } from '@/ar/PetARScene';
 import type { ImageMarkerName } from '@/ar/arResources';
+import { GAME_CONFIG } from '@/game/config';
+
+// ---------------------------------------------------------------------------
+// AR placement types and helpers
+// ---------------------------------------------------------------------------
+
+type PlacementStatus = 'scanning' | 'ready' | 'placed';
+
+function getHintText(status: PlacementStatus): string {
+  if (status === 'scanning') return t.ar.scanning;
+  if (status === 'ready') return t.ar.tapToPlace;
+  return t.ar.placed;
+}
+
+function ScanningRing() {
+  const opacity = useSharedValue(1);
+  opacity.value = withRepeat(withTiming(0.35, { duration: 900 }), -1, true);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
+  return <Animated.View pointerEvents="none" style={[styles.scanningRing, animatedStyle]} />;
+}
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -71,6 +101,13 @@ export function ARWalkScreen() {
     markerBannerTimerRef.current = setTimeout(() => {
       setMarkerBannerText(null);
     }, 3000);
+  }
+
+  // Placement status driven by PetARScene via onPlacementStateChanged callback.
+  const [placementStatus, setPlacementStatus] = useState<PlacementStatus>('scanning');
+
+  function handlePlacementStateChanged(status: PlacementStatus) {
+    setPlacementStatus(status);
   }
 
   // Whether the thermal warning banner is shown.
@@ -153,6 +190,7 @@ export function ARWalkScreen() {
   function handleResume() {
     setArActive(true);
     setShowThermalWarning(false);
+    setPlacementStatus('scanning');
   }
 
   /** Navigate back to the Walks tab, unmounting the AR session cleanly. */
@@ -176,7 +214,11 @@ export function ARWalkScreen() {
           initialScene={{ scene: PetARScene }}
           autofocus
           shadowsEnabled={false}
-          viroAppProps={{ onMarkerFound: handleMarkerFound }}
+          depthEnabled={GAME_CONFIG.ar.depthEnabled}
+          viroAppProps={{
+            onMarkerFound: handleMarkerFound,
+            onPlacementStateChanged: handlePlacementStateChanged,
+          }}
         />
       )}
 
@@ -195,10 +237,13 @@ export function ARWalkScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Plane-detecting hint — shown while AR is active (always visible as a guide) */}
+      {/* Scanning ring — shown while AR is active and pet has not yet been placed */}
+      {arActive && placementStatus !== 'placed' && <ScanningRing />}
+
+      {/* Placement hint — shown while AR is active */}
       {arActive && (
         <View style={styles.hintBanner} pointerEvents="none">
-          <Text style={styles.hintText}>{t.ar.planeDetecting}</Text>
+          <Text style={styles.hintText}>{getHintText(placementStatus)}</Text>
         </View>
       )}
 
@@ -264,7 +309,19 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
 
-  // ---- Plane-detecting hint ----
+  // ---- Scanning ring ----
+  scanningRing: {
+    position: 'absolute',
+    top: '45%',
+    alignSelf: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+
+  // ---- Placement hint ----
   hintBanner: {
     position: 'absolute',
     bottom: spacing.xxl,

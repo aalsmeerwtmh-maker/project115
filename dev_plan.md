@@ -1408,26 +1408,26 @@ src/components/OfflineBanner.tsx
 
 #### Phase 6 Verification Checklist
 
-- [ ] `npm run typecheck` clean.
-- [ ] `npm run lint` clean.
-- [ ] `src/game/__tests__/streaks.test.ts` passes in plain Node.
-- [ ] Toggling `locale` to `'zh-TW'` renders all UI in Traditional Chinese.
-- [ ] `DailyCheckinModal` appears on first open of each day; does not re-appear same day.
-- [ ] Seven consecutive check-ins award +10 streak bonus tokens on day 7.
-- [ ] Fresh install routes to Onboarding; completing creates pet and routes to Main; restarting goes to Main.
-- [ ] Walking into a new geofence cell shows `DiscoveryToast` for ~3 seconds.
-- [ ] `ExplorationMapScreen` shows visited cells as semi-transparent polygons.
-- [ ] `WalkEventModal` appears during walk at configured interval (set `intervalMinutes: 1` to test, then revert to `10`).
-- [ ] AR screen compiles without crash; `ImageMarkerScene` renders without error.
-- [ ] Pet avatar animates correctly for each mood state.
-- [ ] Haptic feedback fires on: goal reached, boss win, daily check-in claim, new cell discovery.
-- [ ] VoiceOver/TalkBack: all interactive elements announce meaningful labels.
-- [ ] Every screen shows `EmptyState` or `ErrorState` when data is absent or fails.
-- [ ] Airplane Mode causes offline banner to appear; restoring connectivity removes it.
-- [ ] Daily walk reminder notification fires at correct time.
-- [ ] Quiet hours prevent notification scheduling inside configured window.
-- [ ] No hardcoded UI strings in any JSX `return`.
-- [ ] No business logic inside any JSX `return` statement.
+- [x] `npm run typecheck` clean.
+- [x] `npm run lint` clean.
+- [x] `src/game/__tests__/streaks.test.ts` passes in plain Node.
+- [x] Toggling `locale` to `'zh-TW'` renders all UI in Traditional Chinese.
+- [x] `DailyCheckinModal` appears on first open of each day; does not re-appear same day.
+- [x] Seven consecutive check-ins award +10 streak bonus tokens on day 7.
+- [x] Fresh install routes to Onboarding; completing creates pet and routes to Main; restarting goes to Main.
+- [x] Walking into a new geofence cell shows `DiscoveryToast` for ~3 seconds.
+- [x] `ExplorationMapScreen` shows visited cells as semi-transparent polygons.
+- [x] `WalkEventModal` appears during walk at configured interval (set `intervalMinutes: 1` to test, then revert to `10`).
+- [x] AR screen compiles without crash; `ImageMarkerScene` renders without error.
+- [x] Pet avatar animates correctly for each mood state.
+- [x] Haptic feedback fires on: goal reached, boss win, daily check-in claim, new cell discovery.
+- [x] VoiceOver/TalkBack: all interactive elements announce meaningful labels.
+- [x] Every screen shows `EmptyState` or `ErrorState` when data is absent or fails.
+- [x] Airplane Mode causes offline banner to appear; restoring connectivity removes it.
+- [x] Daily walk reminder notification fires at correct time.
+- [x] Quiet hours prevent notification scheduling inside configured window.
+- [x] No hardcoded UI strings in any JSX `return`.
+- [x] No business logic inside any JSX `return` statement.
 
 ### 🔲 Phase 7 — Release Prep
 
@@ -1626,21 +1626,21 @@ Create `docs/pre-submission-checklist.md` with checkboxes covering:
 - [ ] `npm test` — all existing tests pass.
 - [ ] Sentry receives a test breadcrumb when a walk is started in a development build.
 - [ ] `ErrorBoundary.componentDidCatch` sends exception to Sentry (verify with deliberate dev throw).
-- [ ] All analytics functions exported from `src/services/analytics.ts` with correct TS signatures.
+- [x] All analytics functions exported from `src/services/analytics.ts` with correct TS signatures.
 - [ ] Cold start < 3s on mid-tier Android after `InteractionManager` defer.
-- [ ] `ViroARSceneNavigator` has `shadowsEnabled={false}`.
+- [x] `ViroARSceneNavigator` has `shadowsEnabled={false}`.
 - [ ] `PrivacyPolicyScreen` opens from Profile → About → "Privacy Policy".
 - [ ] `TermsScreen` opens from Profile → About → "Terms of Use".
-- [ ] Privacy policy text accurately covers camera, location, motion, no-backend, Sentry, IAP.
-- [ ] `RootStackParamList` includes `PrivacyPolicy` and `Terms`.
-- [ ] `docs/store-listing.md` exists with English + zh-TW description drafts.
-- [ ] `docs/release.md` exists with complete pipeline.
-- [ ] `docs/pre-submission-checklist.md` exists with all items.
-- [ ] `eas.json` submit block has placeholder `ios` + `android` sub-objects (no real credentials in git).
-- [ ] `google-play-service-account.json` in `.gitignore`.
-- [ ] `docs/dev-workflow.md` has EAS Secrets Reference section.
-- [ ] `app.config.ts` has `ios.privacyManifests` block.
-- [ ] `app.config.ts` `extra.sentryDsn` reads from `process.env.SENTRY_DSN`.
+- [x] Privacy policy text accurately covers camera, location, motion, no-backend, Sentry, IAP.
+- [x] `RootStackParamList` includes `PrivacyPolicy` and `Terms`.
+- [x] `docs/store-listing.md` exists with English + zh-TW description drafts.
+- [x] `docs/release.md` exists with complete pipeline.
+- [x] `docs/pre-submission-checklist.md` exists with all items.
+- [x] `eas.json` submit block has placeholder `ios` + `android` sub-objects (no real credentials in git).
+- [x] `google-play-service-account.json` in `.gitignore`.
+- [x] `docs/dev-workflow.md` has EAS Secrets Reference section.
+- [x] `app.config.ts` has `ios.privacyManifests` block.
+- [x] `app.config.ts` `extra.sentryDsn` reads from `process.env.SENTRY_DSN`.
 - [ ] `eas build --profile production --platform all` completes without error.
 - [ ] TestFlight build appears in App Store Connect internal testers list.
 - [ ] Play Internal Testing build appears in Google Play Console.

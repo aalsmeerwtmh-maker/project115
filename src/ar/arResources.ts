@@ -9,7 +9,7 @@
  * When the model arrives, uncomment PET_MODEL_PATH below and update PetARScene.tsx
  * to use Viro3DObject instead of ViroSphere.
  */
-import { ViroAnimations } from '@reactvision/react-viro';
+import { ViroAnimations, ViroMaterials, ViroARTrackingTargets } from '@reactvision/react-viro';
 
 // ---------------------------------------------------------------------------
 // Asset path constants
@@ -58,3 +58,49 @@ ViroAnimations.registerAnimations({
  * Usage: animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: true }}
  */
 export const IDLE_ANIMATION_NAME = 'petIdlePulse';
+
+// Orange material for the placeholder sphere so it is clearly visible.
+ViroMaterials.createMaterials({
+  petPlaceholder: {
+    lightingModel: 'Blinn',
+    diffuseColor: '#F5A623',
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Image marker registration
+//
+// PLACEHOLDER — replace placeholder_*.png with real team-authored images before demo.
+// ViroARTrackingTargets.createTargets runs at module load time, the same as
+// ViroAnimations.registerAnimations above — safe to call multiple times with
+// the same keys (Viro ignores duplicates).
+// ---------------------------------------------------------------------------
+
+export const IMAGE_MARKER_TOKEN_REWARD = 25;
+
+ViroARTrackingTargets.createTargets({
+  // PLACEHOLDER — replace with real team-authored image asset before demo.
+  markerAlpha: {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    source: require('../../assets/ar/markers/placeholder_alpha.png'),
+    orientation: 'Up',
+    physicalWidth: 0.2, // 20 cm physical width
+  },
+  // PLACEHOLDER — replace with real team-authored image asset before demo.
+  markerBeta: {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    source: require('../../assets/ar/markers/placeholder_beta.png'),
+    orientation: 'Up',
+    physicalWidth: 0.2,
+  },
+  // PLACEHOLDER — replace with real team-authored image asset before demo.
+  markerGamma: {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    source: require('../../assets/ar/markers/placeholder_gamma.png'),
+    orientation: 'Up',
+    physicalWidth: 0.2,
+  },
+});
+
+export const IMAGE_MARKER_NAMES = ['markerAlpha', 'markerBeta', 'markerGamma'] as const;
+export type ImageMarkerName = (typeof IMAGE_MARKER_NAMES)[number];

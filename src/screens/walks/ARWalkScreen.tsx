@@ -22,8 +22,9 @@ import type { RootStackParamList } from '@/navigation/types';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 import { PetARScene } from '@/ar/PetARScene';
+import type { ImageMarkerName } from '@/ar/arResources';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -59,6 +60,18 @@ export function ARWalkScreen() {
 
   // Whether the ViroARSceneNavigator is currently mounted.
   const [arActive, setArActive] = useState(true);
+
+  // Marker discovery banner
+  const [markerBannerText, setMarkerBannerText] = useState<string | null>(null);
+  const markerBannerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleMarkerFound(_markerName: ImageMarkerName, tokensAwarded: number) {
+    setMarkerBannerText(`+${tokensAwarded} tokens — Marker discovered!`);
+    if (markerBannerTimerRef.current) clearTimeout(markerBannerTimerRef.current);
+    markerBannerTimerRef.current = setTimeout(() => {
+      setMarkerBannerText(null);
+    }, 3000);
+  }
 
   // Whether the thermal warning banner is shown.
   const [showThermalWarning, setShowThermalWarning] = useState(false);
@@ -162,28 +175,36 @@ export function ARWalkScreen() {
           style={styles.arNavigator}
           initialScene={{ scene: PetARScene }}
           autofocus
+          viroAppProps={{ onMarkerFound: handleMarkerFound }}
         />
+      )}
+
+      {/* Marker discovery banner */}
+      {markerBannerText != null && (
+        <View style={styles.markerBanner} pointerEvents="none">
+          <Text style={styles.markerBannerText}>{markerBannerText}</Text>
+        </View>
       )}
 
       {/* Paused overlay — shown when AR has been suspended due to inactivity */}
       {!arActive && (
         <TouchableOpacity style={styles.pausedOverlay} onPress={handleResume} activeOpacity={0.8}>
-          <Text style={styles.pausedTitle}>{en.ar.arPaused}</Text>
-          <Text style={styles.pausedSubtitle}>{en.ar.tapToResume}</Text>
+          <Text style={styles.pausedTitle}>{t.ar.arPaused}</Text>
+          <Text style={styles.pausedSubtitle}>{t.ar.tapToResume}</Text>
         </TouchableOpacity>
       )}
 
       {/* Plane-detecting hint — shown while AR is active (always visible as a guide) */}
       {arActive && (
         <View style={styles.hintBanner} pointerEvents="none">
-          <Text style={styles.hintText}>{en.ar.planeDetecting}</Text>
+          <Text style={styles.hintText}>{t.ar.planeDetecting}</Text>
         </View>
       )}
 
       {/* Thermal warning banner */}
       {arActive && showThermalWarning && (
         <View style={styles.thermalBanner} pointerEvents="none">
-          <Text style={styles.thermalText}>{en.ar.deviceWarm}</Text>
+          <Text style={styles.thermalText}>{t.ar.deviceWarm}</Text>
         </View>
       )}
 
@@ -194,7 +215,7 @@ export function ARWalkScreen() {
           onPress={handleClose}
           hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
         >
-          <Text style={styles.closeButtonText}>{en.ar.exitAR}</Text>
+          <Text style={styles.closeButtonText}>{t.ar.exitAR}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     </View>
@@ -274,6 +295,23 @@ const styles = StyleSheet.create({
   thermalText: {
     ...typography.caption,
     color: colors.textPrimary,
+  },
+
+  // ---- Marker discovery banner ----
+  markerBanner: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? spacing.xxl + spacing.lg : spacing.xl,
+    left: BANNER_HORIZONTAL_MARGIN,
+    right: BANNER_HORIZONTAL_MARGIN,
+    backgroundColor: colors.info,
+    borderRadius: radius.md,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
+  },
+  markerBannerText: {
+    ...typography.bodyBold,
+    color: colors.surface,
   },
 
   // ---- HUD ----

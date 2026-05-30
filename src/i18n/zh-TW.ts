@@ -135,6 +135,9 @@ export const zhTW = {
     tapToResume: '點擊繼續',
     deviceWarm: '裝置溫度升高',
     planeDetecting: '請將相機對準平面…',
+    scanning: '正在掃描平面…',
+    tapToPlace: '點擊放置你的寵物',
+    placed: '寵物已放置！',
   },
 
   // Onboarding

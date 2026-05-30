@@ -45,12 +45,17 @@ export interface WalkEvents {
   dialogues: string[];
 }
 
+export interface ARConfig {
+  depthEnabled: boolean; // ARCore Depth API; set false to save battery on low-end hardware
+}
+
 export interface GameConfig {
   bosses: BossDefinition[];
   equipment: EquipmentItem[];
   iapBundles: IapBundle[];
   tokenEarnRates: TokenEarnRates;
   walkEvents: WalkEvents;
+  ar: ARConfig;
 }
 
 export const GAME_CONFIG: GameConfig = {
@@ -230,6 +235,8 @@ export const GAME_CONFIG: GameConfig = {
       displayPrice: '$4.99',
     },
   ],
+
+  ar: { depthEnabled: true },
 
   walkEvents: {
     intervalMinutes: 10,

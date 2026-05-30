@@ -135,6 +135,9 @@ export const en = {
     tapToResume: 'Tap to resume',
     deviceWarm: 'Device getting warm',
     planeDetecting: 'Point camera at a flat surface…',
+    scanning: 'Scanning for a surface…',
+    tapToPlace: 'Tap to place your pet',
+    placed: 'Pet placed!',
   },
 
   // Onboarding

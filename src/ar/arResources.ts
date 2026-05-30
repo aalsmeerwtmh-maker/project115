@@ -9,6 +9,7 @@
  * When the model arrives, uncomment PET_MODEL_PATH below and update PetARScene.tsx
  * to use Viro3DObject instead of ViroSphere.
  */
+import { Platform } from 'react-native';
 import { ViroAnimations, ViroMaterials, ViroARTrackingTargets } from '@reactvision/react-viro';
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,20 @@ ViroMaterials.createMaterials({
 // ViroAnimations.registerAnimations above — safe to call multiple times with
 // the same keys (Viro ignores duplicates).
 // ---------------------------------------------------------------------------
+
+// Halves ARCore detection workload on Android with no effect on iOS ARKit.
+export const PLANE_ALIGNMENT: 'HorizontalUpward' | 'Horizontal' = Platform.select({
+  android: 'HorizontalUpward',
+  default: 'Horizontal',
+});
+
+// Hit-test result priority: prefer the most stable/accurate type.
+export const HIT_TEST_PRIORITY: string[] = [
+  'ExistingPlanePoint',
+  'EstimatedHorizontalPlane',
+  'DepthPoint',
+  'FeaturePoint',
+];
 
 export const IMAGE_MARKER_TOKEN_REWARD = 25;
 

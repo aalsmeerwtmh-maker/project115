@@ -18,6 +18,7 @@ android/
 
 # Env
 .env
+.env.local
 .env.*.local
 
 # Logs / debug

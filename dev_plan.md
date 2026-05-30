@@ -872,7 +872,7 @@ Goal: during a walk, user can pop the phone into AR and see their pet on the gro
 
 **Why after maps:** AR is the highest-risk native integration. Doing it after the rest of the data + UI is stable means we can isolate AR-specific bugs without conflating them with step or DB issues.
 
-### 🔲 Phase 5 — Game Systems
+### ✅ Phase 5 — Game Systems
 
 Goal: the game loop is closed — exercise produces rewards, rewards buy things, things make the next exercise session more rewarding.
 
@@ -1187,13 +1187,247 @@ The two-row pattern keeps the permanent win record (`boss`) separate from the tr
 
 ### 🔲 Phase 6 — Polish
 
-- Daily check-in flow with streak rewards.
-- Local push notifications (`expo-notifications`): "Your pet is waiting for a walk!" — quiet hours configurable.
-- Onboarding flow: pet selection, daily goal calibration, permission priming screens (ask in-app before triggering OS prompts).
-- Pet idle/walk/happy animations using Reanimated; haptic feedback on rewards.
-- Accessibility pass: screen reader labels on every interactive element, dynamic type support, color-contrast verification.
-- Empty states, error states, offline banner.
-- i18n groundwork: move all hardcoded UI strings into a `src/i18n/en.ts` constants file now, so zh-TW can be added later by swapping a single locale file. Do not implement a full i18n library yet — just no magic strings in JSX.
+**Sources of work:** Original Phase 6 items (daily check-in, notifications, onboarding, animations, haptics, accessibility, offline banner, i18n); Phase 3 gaps (discovery toast, exploration map, random walk events); Phase 4 gap (AR image markers).
+
+**Delivery order within Phase 6:** 6.1 (i18n + locale switcher) → 6.2 (settingsStore additions) → 6.3 (notifications service) → 6.4 (daily check-in + streak) → 6.5 (onboarding flow) → 6.6 (discovery toast + exploration map) → 6.7 (random walk events) → 6.8 (AR image markers) → 6.9 (PetAvatar animations + haptics) → 6.10 (accessibility pass) → 6.11 (empty + error states) → 6.12 (offline banner).
+
+---
+
+#### 6.1 — Locale System (`src/i18n/`)
+
+Add `src/i18n/zh-TW.ts` mirroring `en.ts` in Traditional Chinese. Add `src/i18n/index.ts` that reads `locale` from `settingsStore` and re-exports the correct strings as `t`. Update all screens from `import { en }` to `import { t }`. No third-party i18n library.
+
+**New i18n keys needed** (both locale files):
+
+| Namespace | Keys |
+|---|---|
+| `onboarding` | `welcome`, `chooseSpecies`, `setGoal`, `permissionsTitle`, `permissionsBody`, `allowNotifications`, `allowLocation`, `allowMotion`, `skip`, `next`, `finish`, `dogName`, `catName`, `foxName` |
+| `checkin` | `dailyCheckinTitle`, `streakDay` (fn), `rewardEarned` (fn), `claimButton` |
+| `walks` | `discoveryBanner` (fn: `"+N tokens — New location discovered!"`), `explorationMapTitle`, `randomEventTitle`, `randomEventDismiss` |
+| `profile` | `localeLabel`, `localeEn`, `localeZhTw`, `quietHoursLabel`, `quietHoursStart`, `quietHoursEnd` |
+| `common` | `offlineBanner`, `retry`, `errorGeneric`, `emptyGeneric` |
+
+**Done state:** Toggling `locale` to `'zh-TW'` in `settingsStore` causes all UI to render in Traditional Chinese at next render. `npm run typecheck` clean.
+
+---
+
+#### 6.2 — `settingsStore` Additions
+
+Add three persisted fields: `quietHoursStart: number` (default `22`), `quietHoursEnd: number` (default `7`), `locale: 'en' | 'zh-TW'` (default `'en'`). Each gets a `setX` action persisted via `setProgress`. Update `hydrate()` to load all new keys.
+
+**Files:** `src/stores/settingsStore.ts`.
+
+---
+
+#### 6.3 — Notifications Service (`src/services/notifications.ts`)
+
+Implement the stub. Only this file imports from `expo-notifications`.
+
+```typescript
+export async function requestNotificationPermission(): Promise<boolean>
+export async function scheduleDailyWalkReminder(quietHoursStart: number, quietHoursEnd: number): Promise<void>
+export async function cancelDailyWalkReminder(): Promise<void>
+export async function scheduleCheckinReminder(): Promise<void>
+```
+
+- `scheduleDailyWalkReminder` — schedules a daily trigger at `09:00` local time with identifier `'daily-walk-reminder'`, unless 09:00 falls inside quiet hours `[quietHoursStart, quietHoursEnd)` — in that case advance to `quietHoursEnd:05`. All notification text from `t.common`.
+- Guard: if `settingsStore.notificationsEnabled === false`, all schedule calls no-op.
+- Integration: call `scheduleDailyWalkReminder` from `App.tsx` after `hydrateSettings()`. Re-schedule when quiet-hours change in Profile. Cancel when notifications toggled off; re-schedule when toggled on.
+
+**Files:** `src/services/notifications.ts`, `App.tsx`, `src/screens/profile/ProfileScreen.tsx` (add quiet-hours stepper rows).
+
+---
+
+#### 6.4 — Daily Check-in Flow + Streak Rewards
+
+```
+src/screens/home/components/DailyCheckinModal.tsx
+src/game/streaks.ts   (implement the stub)
+src/game/__tests__/streaks.test.ts
+```
+
+On `HomeScreen` mount: read `last_checkin_date` from the `progress` KV table via new helpers `getLastCheckinDate()` / `setLastCheckinDate()` in `src/db/repositories/progress.ts`. If today is unchecked, show `DailyCheckinModal`.
+
+On claim: call `computeStreak(lastCheckinDate, streakCurrent)` → `setStreakCurrent(newStreak)`. If `isStreakMilestone(newStreak)`: award `streakMilestoneBonus` tokens. Otherwise award `checkinTokenAmount()`. Write `lastCheckinDate`. Dismiss modal.
+
+`src/game/streaks.ts` — implement `computeStreak(lastCheckinDate: string | null, currentStreak: number): number`:
+- Returns `currentStreak + 1` if `lastCheckinDate` was yesterday.
+- Returns `1` if it was more than one day ago or null.
+- Returns `currentStreak` unchanged if today (guard against double-count).
+
+Unit tests: streak resets on gap, increments on consecutive days, doesn't double-count today.
+
+---
+
+#### 6.5 — Onboarding Flow
+
+Replace the stub `OnboardingScreen.tsx` with a 5-page flow (single screen, paged `ScrollView` with dots indicator):
+
+| Page | Content |
+|---|---|
+| 1 — Welcome | Headline + tagline from `t.onboarding.welcome` |
+| 2 — Choose your pet | Dog / Cat / Fox cards using `PetAvatar`; `TextInput` for name; writes to `petStore` |
+| 3 — Set daily goal | Extract `GoalStepper` from `ProfileScreen` into `src/components/GoalStepper.tsx`; reuse here |
+| 4 — Permissions priming | Location + Motion + Notifications rows with one-tap grant; calls `requestNotificationPermission()`, `requestForegroundPermissionsAsync()`, `Pedometer.requestPermissionsAsync()` in sequence |
+| 5 — All set | CTA "Let's go!" → writes `onboarding_complete: true` to progress KV → `navigation.replace('Main')` |
+
+**First-launch detection:** Read `onboarding_complete` from DB in `App.tsx` after bootstrap. Pass to `RootNavigator`. Remove `initialRouteName="Main"` shortcut; restore `initialRouteName` to `'Onboarding'` when `onboardingComplete === false`, `'Main'` otherwise.
+
+**Files:** `src/screens/onboarding/OnboardingScreen.tsx`, `src/components/GoalStepper.tsx`, `src/navigation/RootNavigator.tsx`, `App.tsx`.
+
+---
+
+#### 6.6 — Discovery Toast + Exploration Map
+
+**Phase 3 gap A — Discovery toast:**
+
+```
+src/components/DiscoveryToast.tsx
+```
+
+Reanimated slide-in banner from top, auto-dismiss after 3 s. Add `onNewCell?: (tokensAwarded: number) => void` callback to `UseWalkSessionReturn`; call it in `handleNewCoords` after `addTokens`. `WalksScreen` wires it to show the toast with `t.walks.discoveryBanner(tokens)`.
+
+**Phase 3 gap B — Exploration map:**
+
+```
+src/screens/walks/ExplorationMapScreen.tsx
+```
+
+Full-screen `MapView` showing all visited geofence cells as semi-transparent polygons. Add `getCheckinEvents(): Promise<Event[]>` to events repository. Decode `cellKey` from each checkin payload → compute 0.0005° cell bounds → render `Polygon` with `fillColor: colors.info + '55'`. Add "Map" icon button in `WalksScreen` header. Add `ExplorationMap: undefined` to `RootStackParamList`.
+
+---
+
+#### 6.7 — Random Walk Events
+
+**Phase 3 gaps C + D**
+
+Add to `GAME_CONFIG`:
+```typescript
+walkEvents: {
+  intervalMinutes: number;  // default: 10
+  dialogues: string[];      // 8+ pet-perspective walk snippets
+}
+```
+
+In `useWalkSession.start()` register a third interval (`walkEventTimerRef`) that fires every `intervalMinutes * 60_000` ms. On each tick: pick random dialogue, call `onWalkEvent?.(dialogue)`, insert `type='story'` event row.
+
+Add `onWalkEvent?: (dialogue: string) => void` to `UseWalkSessionReturn`. `WalksScreen` renders `WalkEventModal` when triggered.
+
+Extend `StoryPayload`: add `source: 'boss' | 'random_walk'` field (update existing `BossScreen` call site to pass `source: 'boss'`).
+
+```
+src/screens/walks/components/WalkEventModal.tsx
+```
+
+---
+
+#### 6.8 — AR Image Markers
+
+**Phase 4 gap**
+
+Register 3 placeholder image targets in `arResources.ts` via `ViroARTrackingTargets.createTargets`. Create `src/ar/ImageMarkerScene.tsx` rendering `ViroARImageMarker` per target. On `onAnchorFound`: call `insertCheckinEvent`, `addTokens(IMAGE_MARKER_TOKEN_REWARD)`, invoke `onMarkerFound` prop.
+
+Wire into `ARWalkScreen.tsx`: show a discovery banner overlay when `onMarkerFound` fires.
+
+Create `assets/ar/markers/placeholder_alpha.png`, `placeholder_beta.png`, `placeholder_gamma.png` (1×1 white PNGs) — clearly comment `// PLACEHOLDER — replace with real team-authored image assets before demo.`
+
+**Done state:** Compiles without crash. Detection does not fire against placeholders (expected). When team replaces placeholder PNGs with real images, markers are detected and tokens awarded.
+
+---
+
+#### 6.9 — PetAvatar Animations + Haptic Feedback
+
+**Animations** — `src/components/PetAvatar.tsx`:
+
+Accept `mood` prop. Use `useSharedValue` + `useAnimatedStyle` from `react-native-reanimated`.
+
+| Mood | Animation |
+|---|---|
+| `normal` | Gentle vertical float ±4 dp over 2 s, `withRepeat(..., -1, true)` |
+| `happy` | Scale 1→1.12→1 over 0.4 s, repeat 3×, then idle |
+| `excited` | `rotateZ` ±5° over 0.15 s, repeat 6×, then idle |
+| `sad` | Slow `translateY` +6 dp over 1.5 s, hold, back, repeat |
+
+**Haptics** — `src/services/haptics.ts`:
+
+```typescript
+export function hapticReward(): void    // ImpactFeedbackStyle.Heavy
+export function hapticSuccess(): void   // NotificationFeedbackType.Success
+export function hapticSelection(): void // selection feedback
+```
+
+Call sites: `DailyCheckinModal` claim → `hapticReward`. `BossResultModal` win → `hapticSuccess`. `DiscoveryToast` appear → `hapticSelection`. `HomeScreen` goal-reached transition → `hapticSuccess`.
+
+---
+
+#### 6.10 — Accessibility Pass
+
+1. `PrimaryButton` — `accessibilityRole="button"`, `accessibilityLabel={label}`, `accessibilityState={{ disabled }}`.
+2. `StepRing` — `accessibilityRole="progressbar"`, `accessibilityValue={{ min: 0, max: goal, now: steps }}`.
+3. `PetAvatar` — `accessibilityLabel` = `"{name} the {species}, feeling {mood}"`.
+4. `BottomTabs` — `tabBarAccessibilityLabel` per tab.
+5. `BossCard` — per-requirement row labels with met/not-met state.
+6. `ShopItemCard` — label with name, price, owned/equip state.
+7. All `Switch` components — `accessibilityLabel` + `accessibilityRole="switch"`.
+8. All modals — `accessibilityViewIsModal={true}` on container.
+9. Color contrast audit — verify `textSecondary` (#7A6245) on `background` (#FDF8E8) meets WCAG AA 4.5:1; darken to `#6A5235` in `colors.ts` if needed.
+10. `allowFontScaling={true}` explicit on all `Text` in `src/components/`.
+
+---
+
+#### 6.11 — Empty States + Error States
+
+```
+src/components/EmptyState.tsx    — icon (emoji), heading, body?, action button?
+src/components/ErrorState.tsx    — heading, body?, retry button
+```
+
+| Screen | Empty | Error |
+|---|---|---|
+| `WalksScreen` past walks | "No walks yet. Start your first walk!" | "Couldn't load past walks." + retry |
+| `ExplorationMapScreen` | "No areas discovered yet." | "Couldn't load map data." + retry |
+| `BossScreen` | "No bosses available yet." | "Couldn't load boss data." + retry |
+| `ShopScreen` | Loading spinner while `fetchProducts` in flight | "Couldn't connect to store." + retry |
+| `ProfileScreen` pet roster | "No pet yet." | — |
+
+Add `loading: boolean` state + `ActivityIndicator` to every screen performing async data fetching.
+
+---
+
+#### 6.12 — Offline Banner
+
+Install `@react-native-community/netinfo` via `npx expo install`. **Requires dev client rebuild.**
+
+```
+src/components/OfflineBanner.tsx
+```
+
+`NetInfo.addEventListener` in `useEffect`. When `isConnected === false`: slide-in banner from top using Reanimated `withTiming` on `translateY`. Rendered once in `App.tsx` above `<RootNavigator />` with `StyleSheet.absoluteFill` + `pointerEvents="none"` so it appears on every screen without per-screen changes.
+
+---
+
+#### Phase 6 Verification Checklist
+
+- [ ] `npm run typecheck` clean.
+- [ ] `npm run lint` clean.
+- [ ] `src/game/__tests__/streaks.test.ts` passes in plain Node.
+- [ ] Toggling `locale` to `'zh-TW'` renders all UI in Traditional Chinese.
+- [ ] `DailyCheckinModal` appears on first open of each day; does not re-appear same day.
+- [ ] Seven consecutive check-ins award +10 streak bonus tokens on day 7.
+- [ ] Fresh install routes to Onboarding; completing creates pet and routes to Main; restarting goes to Main.
+- [ ] Walking into a new geofence cell shows `DiscoveryToast` for ~3 seconds.
+- [ ] `ExplorationMapScreen` shows visited cells as semi-transparent polygons.
+- [ ] `WalkEventModal` appears during walk at configured interval (set `intervalMinutes: 1` to test, then revert to `10`).
+- [ ] AR screen compiles without crash; `ImageMarkerScene` renders without error.
+- [ ] Pet avatar animates correctly for each mood state.
+- [ ] Haptic feedback fires on: goal reached, boss win, daily check-in claim, new cell discovery.
+- [ ] VoiceOver/TalkBack: all interactive elements announce meaningful labels.
+- [ ] Every screen shows `EmptyState` or `ErrorState` when data is absent or fails.
+- [ ] Airplane Mode causes offline banner to appear; restoring connectivity removes it.
+- [ ] Daily walk reminder notification fires at correct time.
+- [ ] Quiet hours prevent notification scheduling inside configured window.
+- [ ] No hardcoded UI strings in any JSX `return`.
+- [ ] No business logic inside any JSX `return` statement.
 
 ### 🔲 Phase 7 — Release Prep
 

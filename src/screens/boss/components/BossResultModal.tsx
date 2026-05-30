@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { View, Text, Modal, StyleSheet } from 'react-native';
 import { PrimaryButton } from '@/components/PrimaryButton';
+import { hapticSuccess } from '@/services/haptics';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 
 interface BossResultModalProps {
   visible: boolean;
@@ -20,25 +22,37 @@ export function BossResultModal({
   dialogueLine,
   onClose,
 }: BossResultModalProps) {
+  useEffect(() => {
+    if (visible && won) {
+      hapticSuccess();
+    }
+  }, [visible, won]);
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="fade"
+      onRequestClose={onClose}
+      accessibilityViewIsModal
+    >
       <View style={styles.backdrop}>
         <View style={styles.card}>
           <Text style={[styles.title, won ? styles.winTitle : styles.lossTitle]}>
-            {won ? en.boss.winTitle : en.boss.lossTitle}
+            {won ? t.boss.winTitle : t.boss.lossTitle}
           </Text>
 
           {won ? (
             <>
-              <Text style={styles.tokensEarned}>{en.boss.tokensEarned(tokensEarned)}</Text>
+              <Text style={styles.tokensEarned}>{t.boss.tokensEarned(tokensEarned)}</Text>
               {dialogueLine.length > 0 && <Text style={styles.dialogue}>{dialogueLine}</Text>}
             </>
           ) : (
-            <Text style={styles.lossMessage}>{en.boss.lossMessage}</Text>
+            <Text style={styles.lossMessage}>{t.boss.lossMessage}</Text>
           )}
 
           <View style={styles.buttonWrapper}>
-            <PrimaryButton label={en.boss.closeButton} onPress={onClose} />
+            <PrimaryButton label={t.boss.closeButton} onPress={onClose} />
           </View>
         </View>
       </View>

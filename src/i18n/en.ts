@@ -31,6 +31,12 @@ export const en = {
     appName: 'PawStep',
     appVersion: '0.1.0',
     petStage: (stage: string) => stage.charAt(0).toUpperCase() + stage.slice(1),
+    localeLabel: 'Language',
+    localeEn: 'English',
+    localeZhTw: '繁體中文',
+    quietHoursLabel: 'Quiet hours',
+    quietHoursStart: 'Start',
+    quietHoursEnd: 'End',
   },
 
   // Pet moods
@@ -68,6 +74,10 @@ export const en = {
       }),
     walkSummary: (distKm: number, steps: number) =>
       `${distKm.toFixed(2)} km · ${steps.toLocaleString()} steps`,
+    discoveryBanner: (tokens: number) => `+${tokens} tokens — New location discovered!`,
+    explorationMapTitle: 'Exploration Map',
+    randomEventTitle: 'Something happened!',
+    randomEventDismiss: 'Got it!',
   },
 
   // Boss screen
@@ -116,5 +126,40 @@ export const en = {
     tapToResume: 'Tap to resume',
     deviceWarm: 'Device getting warm',
     planeDetecting: 'Point camera at a flat surface…',
+  },
+
+  // Onboarding
+  onboarding: {
+    welcome: 'Welcome to PawStep! Walk the world and grow your pet companion.',
+    chooseSpecies: 'Choose your pet',
+    setGoal: 'Set your daily goal',
+    permissionsTitle: 'A few permissions needed',
+    permissionsBody:
+      'PawStep needs access to your location, motion sensors, and notifications to track walks and remind you to stay active.',
+    allowNotifications: 'Allow Notifications',
+    allowLocation: 'Allow Location',
+    allowMotion: 'Allow Motion',
+    skip: 'Skip',
+    next: 'Next',
+    finish: "Let's go!",
+    dogName: 'Dog',
+    catName: 'Cat',
+    foxName: 'Fox',
+  },
+
+  // Daily check-in
+  checkin: {
+    dailyCheckinTitle: 'Daily Check-in',
+    streakDay: (n: number) => `Day ${n}`,
+    rewardEarned: (n: number) => `+${n} tokens`,
+    claimButton: 'Claim Reward',
+  },
+
+  // Common / shared
+  common: {
+    offlineBanner: 'You are offline',
+    retry: 'Retry',
+    errorGeneric: 'Something went wrong.',
+    emptyGeneric: 'Nothing here yet.',
   },
 } as const;

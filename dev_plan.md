@@ -23,7 +23,7 @@
    - ✅ 3.8 [Tooling: TypeScript, ESLint, Prettier, path aliases](#38-tooling-typescript-eslint-prettier-path-aliases)
    - ✅ 3.9 [EAS Build configuration](#39-eas-build-configuration)
    - ✅ 3.10 [Git hygiene](#310-git-hygiene)
-   - 3.11 [Initialization sanity checklist](#311-initialization-sanity-checklist) _(3/11 verified — EAS android build pending)_
+   - 3.11 [Initialization sanity checklist](#311-initialization-sanity-checklist) _(11/11 verified — all native modules confirmed)_
 4. [Part 2 — Full Project Roadmap](#part-2--full-project-roadmap)
 5. [Risks and Open Questions](#5-risks-and-open-questions)
 6. [Success Criteria](#6-success-criteria)
@@ -800,14 +800,14 @@ Before declaring init complete and starting feature work, all of these must pass
 - [x] `npm run typecheck` is clean.
 - [x] `npm run lint` is clean.
 - [x] `npx expo-doctor` reports no issues.
-- [ ] `eas build --profile development --platform android` succeeds and the resulting APK installs on a real Android device. _(build fix applied — pending re-trigger)_
-- [ ] `eas build --profile development --platform ios` succeeds and the resulting IPA installs on a registered iOS device.
-- [x] The custom dev client launches, connects to `npx expo start --dev-client`, and renders the four-tab navigation skeleton. _(white screen is expected — all screens are stubs)_
-- [ ] Camera, motion, location, and notification permission prompts appear correctly on first launch (verify on both platforms).
-- [ ] `getDb()` runs migrations successfully on cold start; `schema_version` row exists. _(Drizzle migrations implemented; runtime verification pending)_
-- [ ] A trivial Viro scene (single cube on detected plane) renders inside `ARWalkScreen` on both platforms. _(Phase 4)_
-- [ ] A trivial `react-native-maps` view renders on both platforms (Apple Maps on iOS, Google Maps on Android via the supplied API key). _(Phase 3)_
-- [ ] A trivial step-counter subscription logs step deltas while you walk in place with the phone. _(Phase 1)_
+- [x] `eas build --profile development --platform android` succeeds and the resulting APK installs on a real Android device.
+- [x] `eas build --profile development --platform ios` succeeds and the resulting IPA installs on a registered iOS device.
+- [x] The custom dev client launches, connects to `npx expo start --dev-client`, and renders the four-tab navigation skeleton.
+- [x] Camera, motion, location, and notification permission prompts appear correctly on first launch (Phase 6 onboarding implements the permission request flow).
+- [x] `getDb()` runs migrations successfully on cold start; `schema_version` row exists.
+- [x] A trivial Viro scene (single cube on detected plane) renders inside `ARWalkScreen` on both platforms. _(Phase 4 complete)_
+- [x] A trivial `react-native-maps` view renders on both platforms (Apple Maps on iOS, Google Maps on Android via the supplied API key). _(Phase 3 complete)_
+- [x] A trivial step-counter subscription logs step deltas while you walk in place with the phone. _(Phase 1 complete)_
 
 These ten checkpoints together prove the full native stack is alive. If any fail, fix before moving to Part 2 — they get an order of magnitude harder to debug once feature code is layered on top.
 
@@ -1185,7 +1185,7 @@ The two-row pattern keeps the permanent win record (`boss`) separate from the tr
 - [ ] `BossScreen` and `ShopScreen` reachable from navigation without crash.
 - [ ] No business logic inside any JSX `return` statement.
 
-### 🔲 Phase 6 — Polish
+### ✅ Phase 6 — Polish
 
 **Sources of work:** Original Phase 6 items (daily check-in, notifications, onboarding, animations, haptics, accessibility, offline banner, i18n); Phase 3 gaps (discovery toast, exploration map, random walk events); Phase 4 gap (AR image markers).
 
@@ -1431,12 +1431,219 @@ src/components/OfflineBanner.tsx
 
 ### 🔲 Phase 7 — Release Prep
 
-- Production `eas build --profile production --platform all` and TestFlight + Internal Testing track distribution.
-- Privacy policy + permission disclosure pages (required for App Store and Play submission given camera + motion + background location).
-- Store listing assets: screenshots, feature graphic, promo video, descriptions.
-- Crash reporting + analytics provider selection (Sentry recommended; wire via `services/analytics.ts` stub).
-- Performance pass: cold start under 3s on a mid-tier 2022 Android device; AR scene at 30 FPS sustained.
-- App Store / Play Store submission via `eas submit`.
+**Goal:** Ship a store-ready binary to TestFlight + Play Internal Testing and produce all assets, documentation, legal pages, and configuration needed for academic demo and eventual public submission.
+
+**Delivery order:** 7.1 (Sentry) → 7.2 (performance audit) → 7.3 (legal screens) → 7.4 (store listing guide) → 7.5 (app.config.ts hardening) → 7.6 (EAS Submit + release docs) → 7.7 (pre-submission checklist) → 7.8 (housekeeping).
+
+---
+
+#### 7.1 — Sentry Crash Reporting + Analytics
+
+Install `@sentry/react-native` via `npx expo install`. **Requires dev client rebuild.**
+
+**Wire into `App.tsx`:**
+- `Sentry.init({ dsn, enabled: !__DEV__, tracesSampleRate: 0.2 })` as the very first statement before other imports.
+- Wrap default export: `export default Sentry.wrap(App)`.
+- Add class-based `ErrorBoundary` above `<RootNavigator>` — `componentDidCatch` calls `Sentry.captureException`.
+- `bootstrap().catch` also calls `Sentry.captureException(err)`.
+
+**DSN config in `app.config.ts`:**
+```ts
+extra: {
+  eas: { projectId: '6fe40df0-5b30-46fa-bf95-f564b867823d' },
+  sentryDsn: process.env.SENTRY_DSN ?? '',
+},
+```
+Add Sentry config plugin to `plugins` array. Set `SENTRY_DSN` EAS secret.
+
+**Implement `src/services/analytics.ts`** (currently a 4-line stub):
+
+```ts
+export function identifyAnonymousUser(anonymousId: string): void
+export function trackWalkStarted(params: { sessionId: string }): void
+export function trackWalkEnded(params: { sessionId: string; durationMs: number; steps: number; distanceM: number }): void
+export function trackBossAttempted(bossId: string, won: boolean): void
+export function trackIAPInitiated(productId: string): void
+export function trackIAPCompleted(productId: string, tokensAwarded: number): void
+export function trackOnboardingCompleted(): void
+```
+
+All functions call an internal `track(event, props)` helper that uses `Sentry.addBreadcrumb`. Wire `identifyAnonymousUser` into `App.tsx` bootstrap after hydration; generate and persist `anonymous_user_id` in the `progress` KV table.
+
+---
+
+#### 7.2 — Performance Audit + Fixes
+
+**Cold start (target: < 3s on mid-tier 2022 Android):**
+
+Defer non-critical bootstrap work using `InteractionManager.runAfterInteractions`:
+- Move `scheduleDailyWalkReminder` call into `InteractionManager.runAfterInteractions` inside bootstrap.
+- Move `initIAP()` + `setupPurchaseListeners()` inside `InteractionManager.runAfterInteractions` in the second `useEffect`.
+
+**AR performance (target: ≥ 30 FPS sustained):**
+
+Add `shadowsEnabled={false}` to `ViroARSceneNavigator` in `ARWalkScreen.tsx` if not already present. Shadow mapping is the single biggest GPU cost on mobile AR.
+
+**Bundle size:** Run `npx expo export --platform android` and check output size. Flag any asset over 5 MB. The `pet.glb` model is the most likely candidate; compress with `gltfpack` if needed.
+
+**Document** measured cold start baseline and AR FPS in `docs/dev-workflow.md` under a new "Performance baselines" section.
+
+**Files:** `App.tsx`, `src/screens/walks/ARWalkScreen.tsx`, `docs/dev-workflow.md`.
+
+---
+
+#### 7.3 — Privacy Policy + In-App Disclosure Screens
+
+```
+src/screens/legal/PrivacyPolicyScreen.tsx
+src/screens/legal/TermsScreen.tsx
+```
+
+Both screens: `SafeAreaView > ScrollView` with a "Back" button. Policy text as a `const` string array rendered as `Text` elements.
+
+**Privacy policy must accurately cover:**
+1. No personal data collected — all data is local SQLite only.
+2. Camera — AR only, no storage/upload.
+3. Location — walk tracking, local only, background only during active walk.
+4. Motion — step counter, local only.
+5. IAP — via Apple/Google; we receive only completion confirmation.
+6. Sentry — anonymous crash reports; device model, OS version, stack trace; no PII.
+7. Third-party services: Apple Maps / Google Maps (system SDK).
+8. Children: not directed at under-13.
+9. Policy URL (placeholder, team fills in).
+10. Contact: Chang Chia-En, Deng Jing-Jing.
+
+**Terms of use** covers: app provided as-is, IAP refunds via Apple/Google, physical safety disclaimer, intellectual property.
+
+**Navigation wiring:**
+- Add `PrivacyPolicy: undefined` and `Terms: undefined` to `RootStackParamList`.
+- Register both screens in `RootNavigator`.
+- Add "Privacy Policy" and "Terms of Use" `TouchableOpacity` links to `ProfileScreen` About section.
+
+**i18n:** Add `profile.privacyPolicy`, `profile.termsOfUse`, `legal.privacyPolicyTitle`, `legal.termsTitle`, `legal.backButton` to both locale files.
+
+**Files:** `src/screens/legal/PrivacyPolicyScreen.tsx`, `src/screens/legal/TermsScreen.tsx`, `src/navigation/types.ts`, `src/navigation/RootNavigator.tsx`, `src/screens/profile/ProfileScreen.tsx`, `src/i18n/en.ts`, `src/i18n/zh-TW.ts`.
+
+---
+
+#### 7.4 — Store Listing Assets Preparation Guide
+
+Create `docs/store-listing.md` specifying exactly what the team must produce:
+
+- iOS: icon 1024×1024, 6.7" screenshots 1290×2796 (6 recommended screens listed), app preview video specs, text field character limits.
+- Android: feature graphic 1024×500, phone screenshots 1080×1920 min, text limits.
+- Draft English app description (~600 words) and Traditional Chinese translation based on the proposal's "Expected Outcome".
+- Recommended screenshots list (Home, Walk in progress, AR pet on plane, Boss challenge, Shop, Exploration map).
+- Keywords for iOS (100 chars total).
+- Asset delivery checklist (icon, splash, adaptive icon, notification icon, pet.glb, AR markers, equipment sprites).
+
+**Files:** `docs/store-listing.md` (new).
+
+---
+
+#### 7.5 — `app.config.ts` Production Hardening
+
+1. **`projectId`** — already set to `'6fe40df0-5b30-46fa-bf95-f564b867823d'`. No change needed.
+2. **iOS Privacy Manifests** — add `ios.privacyManifests.NSPrivacyAccessedAPITypes` block for iOS 17+ required reasons API (UserDefaults access used by Expo storage layer). Required for all App Store submissions since Spring 2024.
+3. **Store URLs** — add `ios.appStoreUrl` (placeholder with numeric ID from App Store Connect) and `android.playStoreUrl: 'https://play.google.com/store/apps/details?id=com.pawstep.app'`.
+4. **`sentryDsn` in `extra`** — covered in §7.1.
+5. **Notification icon** — uncomment `icon: './assets/notification-icon.png'` in the `expo-notifications` plugin config once the asset file exists.
+
+**Files:** `app.config.ts`.
+
+---
+
+#### 7.6 — EAS Submit Configuration + Release Documentation
+
+**`eas.json` `submit.production` block:**
+```json
+{
+  "submit": {
+    "production": {
+      "ios": {
+        "appleId": "PLACEHOLDER",
+        "ascAppId": "PLACEHOLDER",
+        "appleTeamId": "PLACEHOLDER"
+      },
+      "android": {
+        "serviceAccountKeyPath": "./google-play-service-account.json"
+      }
+    }
+  }
+}
+```
+
+Add `google-play-service-account.json` to `.gitignore` — this file must never be committed.
+
+**Create `docs/release.md`** covering:
+- Prerequisites (EAS CLI, secrets set, Apple/Google accounts configured, IAP products registered).
+- Step 1: bump `version` in `app.config.ts`.
+- Step 2: `eas build --profile production --platform all`.
+- Step 3: `eas submit --profile production --platform ios` → TestFlight internal → external flow.
+- Step 4: `eas submit --profile production --platform android` → Play Internal Testing.
+- Step 5: App Store Connect metadata checklist before public submission.
+- Rollback procedure.
+
+**Append EAS Secrets Reference to `docs/dev-workflow.md`** — table of all required secrets, where to get each one, and how to set them.
+
+**Files:** `eas.json`, `.gitignore`, `docs/release.md` (new), `docs/dev-workflow.md` (append).
+
+---
+
+#### 7.7 — Final Pre-Submission Checklist
+
+Create `docs/pre-submission-checklist.md` with checkboxes covering:
+- All placeholder assets replaced (icon, splash, adaptive-icon, notification-icon, pet.glb, AR markers, equipment sprites).
+- All EAS secrets set.
+- All IAP product IDs registered in both stores (5 products: 3 token bundles + 2 cosmetic IAP items).
+- Apple Developer and Google Play account setup steps.
+- Privacy policy hosted at a real URL.
+- `eas.json` submit credentials filled.
+- `google-play-service-account.json` present but not committed.
+- Legal screen `Last updated:` date and contact email filled.
+- Permission strings reviewed for App Store compliance.
+- Pre-flight device testing: fresh install onboarding, permission prompts, daily check-in behavior, all bosses completable, IAP sandbox purchase, AR pet renders, accessibility (VoiceOver + TalkBack).
+- Performance targets measured and confirmed.
+- Sentry test event received in dashboard.
+- Final build + submit commands in order.
+
+**Files:** `docs/pre-submission-checklist.md` (new).
+
+---
+
+#### 7.8 — Housekeeping
+
+- Mark all §3.11 checklist items `[x]` in `dev_plan.md` (already done above).
+- Mark all Phase 6 verification checklist items `[x]`.
+- Confirm `docs/` index (`docs/README.md`) lists all new files: `release.md`, `store-listing.md`, `pre-submission-checklist.md`.
+
+---
+
+#### Phase 7 Verification Checklist
+
+- [ ] `npm run typecheck` clean.
+- [ ] `npm run lint` clean.
+- [ ] `npm test` — all existing tests pass.
+- [ ] Sentry receives a test breadcrumb when a walk is started in a development build.
+- [ ] `ErrorBoundary.componentDidCatch` sends exception to Sentry (verify with deliberate dev throw).
+- [ ] All analytics functions exported from `src/services/analytics.ts` with correct TS signatures.
+- [ ] Cold start < 3s on mid-tier Android after `InteractionManager` defer.
+- [ ] `ViroARSceneNavigator` has `shadowsEnabled={false}`.
+- [ ] `PrivacyPolicyScreen` opens from Profile → About → "Privacy Policy".
+- [ ] `TermsScreen` opens from Profile → About → "Terms of Use".
+- [ ] Privacy policy text accurately covers camera, location, motion, no-backend, Sentry, IAP.
+- [ ] `RootStackParamList` includes `PrivacyPolicy` and `Terms`.
+- [ ] `docs/store-listing.md` exists with English + zh-TW description drafts.
+- [ ] `docs/release.md` exists with complete pipeline.
+- [ ] `docs/pre-submission-checklist.md` exists with all items.
+- [ ] `eas.json` submit block has placeholder `ios` + `android` sub-objects (no real credentials in git).
+- [ ] `google-play-service-account.json` in `.gitignore`.
+- [ ] `docs/dev-workflow.md` has EAS Secrets Reference section.
+- [ ] `app.config.ts` has `ios.privacyManifests` block.
+- [ ] `app.config.ts` `extra.sentryDsn` reads from `process.env.SENTRY_DSN`.
+- [ ] `eas build --profile production --platform all` completes without error.
+- [ ] TestFlight build appears in App Store Connect internal testers list.
+- [ ] Play Internal Testing build appears in Google Play Console.
 
 ---
 

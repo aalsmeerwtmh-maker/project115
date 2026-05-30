@@ -65,6 +65,17 @@ npm install
 
 `patch-package` runs automatically via the `postinstall` script and applies `patches/@reactvision+react-viro+2.55.0.patch`, which fixes a Viro/New Architecture Gradle conflict.
 
+**First-time per-developer setup (WSL2 + Tailscale):**
+
+```bash
+# 1. Find your personal Tailscale IP
+tailscale ip -4
+
+# 2. Create your local env file (gitignored — do not commit)
+cp .env.example .env.local
+# Edit .env.local and replace the placeholder with your Tailscale IP
+```
+
 Then follow the [Dev Workflow](#dev-workflow) section to build the custom dev client and start Metro.
 
 ---
@@ -73,22 +84,16 @@ Then follow the [Dev Workflow](#dev-workflow) section to build the custom dev cl
 
 ### Starting Metro
 
-The dev machine runs WSL2. Tailscale provides a stable VPN IP (`100.69.13.58`) so the physical device can reach the Metro server across the WSL2 network boundary.
+The dev machine runs WSL2. Each developer sets their own Tailscale IP in `.env.local` (see Quick Start above). Metro reads this file automatically:
 
 ```bash
 npm start
 ```
 
-This expands to:
-
-```bash
-REACT_NATIVE_PACKAGER_HOSTNAME=100.69.13.58 expo start --dev-client
-```
-
 To also clear the Metro cache (required after adding a native module or changing `babel.config.js`):
 
 ```bash
-REACT_NATIVE_PACKAGER_HOSTNAME=100.69.13.58 npx expo start -c --dev-client
+npm start -- -c
 ```
 
 Scan the QR code with the PawStep dev client app (not the regular Expo Go app).

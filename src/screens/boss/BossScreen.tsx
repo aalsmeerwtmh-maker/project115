@@ -13,10 +13,12 @@ import {
 import { generateId } from '@/utils/id';
 import { BossCard } from './components/BossCard';
 import { BossResultModal } from './components/BossResultModal';
+import { EmptyState } from '@/components/EmptyState';
+import { ErrorState } from '@/components/ErrorState';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 import type { BossDefinition } from '@/game/config';
 import type { Event } from '@/db/schema';
 import type { BossPayload } from '@/db/repositories/events';
@@ -56,19 +58,26 @@ export function BossScreen() {
     };
   }, []);
 
+  const [bossLoadError, setBossLoadError] = useState(false);
+
   const loadBossEvents = useCallback(async () => {
+    setBossLoadError(false);
     try {
       const rows = await getBossEvents();
       setBossEvents(rows);
     } catch {
       setBossEvents([]);
+      setBossLoadError(true);
     }
   }, []);
 
   useEffect(() => {
     getBossEvents()
       .then(setBossEvents)
-      .catch(() => setBossEvents([]));
+      .catch(() => {
+        setBossEvents([]);
+        setBossLoadError(true);
+      });
   }, []);
 
   function isDefeated(bossId: string): boolean {
@@ -153,8 +162,8 @@ export function BossScreen() {
   if (!activePet) {
     return (
       <SafeAreaView style={styles.safe}>
-        <Text style={styles.heading}>{en.boss.title}</Text>
-        <Text style={styles.emptyText}>No active pet found.</Text>
+        <Text style={styles.heading}>{t.boss.title}</Text>
+        <EmptyState heading="No active pet found." />
       </SafeAreaView>
     );
   }
@@ -163,11 +172,17 @@ export function BossScreen() {
 
   return (
     <SafeAreaView style={styles.safe}>
+      {bossLoadError && (
+        <ErrorState heading="Couldn't load boss data." onRetry={() => void loadBossEvents()} />
+      )}
       <FlatList
         data={bosses}
         keyExtractor={(b) => b.id}
         contentContainerStyle={styles.list}
-        ListHeaderComponent={<Text style={styles.heading}>{en.boss.title}</Text>}
+        ListHeaderComponent={<Text style={styles.heading}>{t.boss.title}</Text>}
+        ListEmptyComponent={
+          !bossLoadError ? <EmptyState heading="No bosses available yet." /> : null
+        }
         renderItem={({ item: boss }) => (
           <BossCard
             boss={boss}
@@ -209,10 +224,5 @@ const styles = StyleSheet.create({
     color: colors.primary,
     marginTop: spacing.lg,
     marginBottom: spacing.md,
-  },
-  emptyText: {
-    ...typography.body,
-    color: colors.textSecondary,
-    margin: spacing.md,
   },
 });

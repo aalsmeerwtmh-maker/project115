@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, StyleSheet, TouchableOpacity, Alert } from 'react-native';
+import {
+  View,
+  Text,
+  FlatList,
+  StyleSheet,
+  TouchableOpacity,
+  Alert,
+  ActivityIndicator,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProgressStore } from '@/stores/progressStore';
 import { usePetStore } from '@/stores/petStore';
@@ -19,10 +27,11 @@ import { generateId } from '@/utils/id';
 import { TokenBalanceBadge } from './components/TokenBalanceBadge';
 import { ShopItemCard } from './components/ShopItemCard';
 import { IapBundleRow } from './components/IapBundleRow';
+import { ErrorState } from '@/components/ErrorState';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 import type { Equipment } from '@/db/schema';
 import type { Product } from '@/services/iap';
 import type { ItemDisplayState } from './components/ShopItemCard';
@@ -37,6 +46,8 @@ export function ShopScreen() {
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
   const [loadingIapId, setLoadingIapId] = useState<string | null>(null);
   const [restoringPurchases, setRestoringPurchases] = useState(false);
+  const [iapLoading, setIapLoading] = useState(true);
+  const [iapError, setIapError] = useState(false);
 
   const refreshOwned = useCallback(async () => {
     try {
@@ -47,14 +58,27 @@ export function ShopScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    getOwnedEquipment()
-      .then(setOwnedItems)
-      .catch(() => setOwnedItems([]));
-    fetchIapProducts()
-      .then(setIapProducts)
-      .catch(() => setIapProducts([]));
+  const loadStore = useCallback(async () => {
+    try {
+      const [owned, products] = await Promise.allSettled([getOwnedEquipment(), fetchIapProducts()]);
+      if (owned.status === 'fulfilled') setOwnedItems(owned.value);
+      if (products.status === 'fulfilled') {
+        setIapProducts(products.value);
+        setIapError(false);
+      } else {
+        setIapError(true);
+      }
+    } catch {
+      setIapError(true);
+    } finally {
+      setIapLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadStore();
+  }, [loadStore]);
 
   function getLivePrice(productId: string): string | null {
     // react-native-iap v15: Product uses `id` (not `productId`) and `displayPrice`
@@ -145,33 +169,39 @@ export function ShopScreen() {
         ListHeaderComponent={
           <View>
             <View style={styles.titleRow}>
-              <Text style={styles.heading}>{en.shop.title}</Text>
+              <Text style={styles.heading}>{t.shop.title}</Text>
               <TokenBalanceBadge tokens={tokens} />
             </View>
 
-            <Text style={styles.sectionTitle}>{en.shop.earnSection}</Text>
+            <Text style={styles.sectionTitle}>{t.shop.earnSection}</Text>
 
-            {GAME_CONFIG.iapBundles.map((bundle) => (
-              <IapBundleRow
-                key={bundle.productId}
-                bundle={bundle}
-                livePrice={getLivePrice(bundle.productId)}
-                onBuy={() => {
-                  handleIapBuy(bundle.productId);
-                }}
-                loading={loadingIapId === bundle.productId}
-              />
-            ))}
+            {iapLoading && <ActivityIndicator color={colors.primary} style={styles.iapLoader} />}
+            {iapError && !iapLoading && (
+              <ErrorState heading="Couldn't connect to store." onRetry={loadStore} />
+            )}
+            {!iapLoading &&
+              !iapError &&
+              GAME_CONFIG.iapBundles.map((bundle) => (
+                <IapBundleRow
+                  key={bundle.productId}
+                  bundle={bundle}
+                  livePrice={getLivePrice(bundle.productId)}
+                  onBuy={() => {
+                    void handleIapBuy(bundle.productId);
+                  }}
+                  loading={loadingIapId === bundle.productId}
+                />
+              ))}
 
             <TouchableOpacity
               style={styles.restoreButton}
-              onPress={handleRestorePurchases}
+              onPress={() => void handleRestorePurchases()}
               disabled={restoringPurchases}
             >
-              <Text style={styles.restoreText}>{en.shop.restorePurchases}</Text>
+              <Text style={styles.restoreText}>{t.shop.restorePurchases}</Text>
             </TouchableOpacity>
 
-            <Text style={styles.sectionTitle}>{en.shop.equipmentSection}</Text>
+            <Text style={styles.sectionTitle}>{t.shop.equipmentSection}</Text>
           </View>
         }
         renderItem={({ item }) => (
@@ -180,13 +210,13 @@ export function ShopScreen() {
             displayState={getDisplayState(item.id)}
             userTokens={tokens}
             onBuy={() => {
-              handleBuy(item.id, item.tokenCost);
+              void handleBuy(item.id, item.tokenCost);
             }}
             onEquip={() => {
-              handleEquip(item.id);
+              void handleEquip(item.id);
             }}
             onUnequip={() => {
-              handleUnequip(item.id);
+              void handleUnequip(item.id);
             }}
             loading={loadingItemId === item.id}
           />
@@ -232,5 +262,8 @@ const styles = StyleSheet.create({
     ...typography.label,
     color: colors.textSecondary,
     textDecorationLine: 'underline',
+  },
+  iapLoader: {
+    marginVertical: spacing.md,
   },
 });

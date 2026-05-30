@@ -20,3 +20,19 @@ export async function setProgress<T>(key: string, value: T): Promise<void> {
     await db.insert(progress).values({ key, value: encoded, updatedAt: now });
   }
 }
+
+// ---------------------------------------------------------------------------
+// Daily check-in helpers
+// ---------------------------------------------------------------------------
+
+const LAST_CHECKIN_DATE_KEY = 'last_checkin_date';
+
+/** Returns the last check-in date string ('YYYY-MM-DD') or null if never checked in. */
+export async function getLastCheckinDate(): Promise<string | null> {
+  return getProgress<string>(LAST_CHECKIN_DATE_KEY);
+}
+
+/** Persists today's date as the last check-in date ('YYYY-MM-DD'). */
+export async function setLastCheckinDate(date: string): Promise<void> {
+  await setProgress(LAST_CHECKIN_DATE_KEY, date);
+}

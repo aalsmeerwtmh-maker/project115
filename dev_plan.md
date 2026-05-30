@@ -1619,6 +1619,152 @@ Create `docs/pre-submission-checklist.md` with checkboxes covering:
 
 ---
 
+#### 7.9 — AR Enhancement
+
+**Goal:** Fix the four observable AR problems on Android (non-LiDAR) — slow detection, shadow-induced plane splitting, pet drift after placement, and flickering overlay — without changing iOS behaviour, and with zero hardcoded booleans or strings in component files.
+
+**Delivery order:** 7.9.1 (config + constants) → 7.9.2 (i18n keys) → 7.9.3 (hit-test placement in PetARScene) → 7.9.4 (scanning ring UI) → 7.9.5 (depth API prop) → 7.9.6 (verify).
+
+---
+
+##### 7.9.1 — Config and Constants
+
+**`src/game/config.ts`** — add `ARConfig` interface and `ar` field:
+
+```typescript
+export interface ARConfig {
+  depthEnabled: boolean; // ARCore Depth API; set false to save battery on low-end hardware
+}
+
+// Add to GameConfig interface:
+ar: ARConfig;
+
+// Add to GAME_CONFIG:
+ar: { depthEnabled: true },
+```
+
+**`src/ar/arResources.ts`** — add two exported constants:
+
+```typescript
+import { Platform } from 'react-native';
+
+// Halves ARCore detection workload on Android with no effect on iOS ARKit.
+export const PLANE_ALIGNMENT: 'HorizontalUpward' | 'Horizontal' = Platform.select({
+  android: 'HorizontalUpward',
+  default: 'Horizontal',
+});
+
+// Hit-test result priority: prefer the most stable/accurate type.
+export const HIT_TEST_PRIORITY: string[] = [
+  'ExistingPlanePoint',
+  'EstimatedHorizontalPlane',
+  'DepthPoint',
+  'FeaturePoint',
+];
+```
+
+---
+
+##### 7.9.2 — i18n Keys
+
+Add to the `ar` namespace in **both** `src/i18n/en.ts` and `src/i18n/zh-TW.ts`:
+
+| Key | English | zh-TW |
+|---|---|---|
+| `scanning` | `'Scanning for a surface…'` | `'正在掃描平面…'` |
+| `tapToPlace` | `'Tap to place your pet'` | `'點擊放置你的寵物'` |
+| `placed` | `'Pet placed!'` | `'寵物已放置！'` |
+
+---
+
+##### 7.9.3 — Hit-Test Placement in `PetARScene.tsx`
+
+Replace `ViroARPlaneSelector` entirely with hit-test placement. The plane overlay (and its shadow-flicker problem) is removed.
+
+**New state:**
+
+```typescript
+type PlacementState =
+  | { status: 'scanning' }
+  | { status: 'ready' }
+  | { status: 'placed'; position: [number, number, number] };
+```
+
+**Flow:**
+1. Scene opens → `status: 'scanning'`
+2. `onAnchorFound` fires (ARCore found first plane) → `status: 'ready'`; call `onPlacementStateChanged?.('ready')`
+3. User taps screen → `onClick` on `ViroARScene` → call `arSceneRef.current?.performARHitTestWithPosition(position, handleHitTestResults)`
+4. `handleHitTestResults` picks the highest-priority result from `HIT_TEST_PRIORITY` → `status: 'placed'` with fixed world position; call `onPlacementStateChanged?.('placed')`
+5. `ViroNode` renders the pet at that fixed world position — **not anchored to a live plane** → no drift
+
+**Key points:**
+- `anchorDetectionTypes={[PLANE_ALIGNMENT]}` stays on `ViroARScene` (ARCore still builds its plane map internally; needed for `ExistingPlanePoint` hit-test results)
+- Only `onAnchorFound` is needed — remove `onAnchorUpdated` and `onAnchorRemoved` forwarders
+- Once `status === 'placed'`, `onClick` is a no-op (guard at top of handler)
+- `ViroARPlaneSelector`, `selectorRef`, and all anchor-forwarding functions are removed
+- The placeholder sphere comment block and `arResources` imports are retained
+
+Read `onPlacementStateChanged` from Viro-injected `viroAppProps` (typed via `as any` since Viro injects at runtime):
+```typescript
+const { onPlacementStateChanged } = (arguments[0] as any)?.sceneNavigator?.viroAppProps ?? {};
+```
+
+---
+
+##### 7.9.4 — Scanning Ring UI in `ARWalkScreen.tsx`
+
+Add `placementStatus` state driven by `onPlacementStateChanged` callback passed via `viroAppProps`.
+
+**`getHintText` helper** (pure function, above the component):
+```typescript
+function getHintText(status: PlacementStatus): string {
+  if (status === 'scanning') return t.ar.scanning;
+  if (status === 'ready') return t.ar.tapToPlace;
+  return t.ar.placed;
+}
+```
+
+**`ScanningRing`** component (above `ARWalkScreen`, uses Reanimated):
+- Pulsing white circle (64×64, `borderRadius: 32`, `borderWidth: 2`, `borderColor: '#FFFFFF'`)
+- Opacity animates 1.0 → 0.35 over 900 ms, `withRepeat(-1, true)`
+- `pointerEvents="none"`, `position: 'absolute'`, centred at `top: '45%'`
+- Only rendered while `placementStatus !== 'placed'`
+
+**Updated hint block** replaces the existing single `{arActive && (...hintBanner...)}`:
+```tsx
+{arActive && placementStatus !== 'placed' && <ScanningRing />}
+{arActive && (
+  <View style={styles.hintBanner} pointerEvents="none">
+    <Text style={styles.hintText}>{getHintText(placementStatus)}</Text>
+  </View>
+)}
+```
+
+Pass `onPlacementStateChanged` in `viroAppProps` alongside the existing `onMarkerFound`:
+```tsx
+viroAppProps={{ onMarkerFound: handleMarkerFound, onPlacementStateChanged: handlePlacementStateChanged }}
+```
+
+---
+
+##### 7.9.5 — Depth API Prop
+
+In `ARWalkScreen.tsx`, add `depthEnabled={GAME_CONFIG.ar.depthEnabled}` to `ViroARSceneNavigator`. Import `GAME_CONFIG` from `@/game/config`. Toggle depth by changing `config.ts` only.
+
+---
+
+**Files modified in 7.9:**
+
+| File | Change |
+|---|---|
+| `src/game/config.ts` | Add `ARConfig`, `ar` field to interface + value |
+| `src/ar/arResources.ts` | Add `PLANE_ALIGNMENT`, `HIT_TEST_PRIORITY` |
+| `src/ar/PetARScene.tsx` | Replace plane selector with hit-test placement |
+| `src/screens/walks/ARWalkScreen.tsx` | Add scanning ring, hint state, depth prop |
+| `src/i18n/en.ts` + `zh-TW.ts` | Add 3 AR keys |
+
+---
+
 #### Phase 7 Verification Checklist
 
 - [ ] `npm run typecheck` clean.
@@ -1644,6 +1790,13 @@ Create `docs/pre-submission-checklist.md` with checkboxes covering:
 - [ ] `eas build --profile production --platform all` completes without error.
 - [ ] TestFlight build appears in App Store Connect internal testers list.
 - [ ] Play Internal Testing build appears in Google Play Console.
+- [ ] `GAME_CONFIG.ar.depthEnabled = false` compiles and runs without crash (depth toggleable from config only).
+- [ ] `PLANE_ALIGNMENT` resolves to `'HorizontalUpward'` on Android (verify via `console.log` in dev build).
+- [ ] AR scene opens with no blue plane overlay visible.
+- [ ] Scanning ring animates while no surface found; disappears after pet placed.
+- [ ] Hint text cycles: "Scanning…" → "Tap to place your pet" → "Pet placed!".
+- [ ] Pet sphere appears at tapped position and does not drift over 30 s on Android non-LiDAR device.
+- [ ] `t.ar.scanning`, `t.ar.tapToPlace`, `t.ar.placed` render in zh-TW when locale is `'zh-TW'`.
 
 ---
 

@@ -1,16 +1,7 @@
 import { useEffect, useState, useRef, useCallback } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  FlatList,
-  Platform,
-  TouchableOpacity,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Polyline } from 'react-native-maps';
-import Constants from 'expo-constants';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/types';
@@ -30,24 +21,6 @@ import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
-
-// Google Maps requires an API key on Android. On iOS, Apple Maps works without one.
-// In dev builds the key is typically absent — render a placeholder rather than crash.
-const androidMapsKey = Constants.expoConfig?.android?.config?.googleMaps?.apiKey;
-const MAP_AVAILABLE = Platform.OS !== 'android' || !!androidMapsKey;
-
-function MapFallback() {
-  return (
-    <View style={styles.mapFallback}>
-      <Text style={styles.mapFallbackTitle}>Map unavailable</Text>
-      <Text style={styles.mapFallbackBody}>
-        Google Maps API key not configured.{'\n'}Add{' '}
-        <Text style={styles.mapFallbackCode}>GOOGLE_MAPS_ANDROID_KEY</Text> via{' '}
-        <Text style={styles.mapFallbackCode}>eas secret:create</Text> and rebuild.
-      </Text>
-    </View>
-  );
-}
 
 function PastWalkItem({ event }: { event: Event }) {
   let payload: WalkPayload | null = null;
@@ -170,15 +143,11 @@ export function WalksScreen() {
           </TouchableOpacity>
         </View>
 
-        {MAP_AVAILABLE ? (
-          <MapView style={styles.map} region={mapRegion} showsUserLocation={isActive}>
-            {mapPolyline.length > 1 && (
-              <Polyline coordinates={mapPolyline} strokeColor={colors.primary} strokeWidth={4} />
-            )}
-          </MapView>
-        ) : (
-          <MapFallback />
-        )}
+        <MapView style={styles.map} region={mapRegion} showsUserLocation={isActive}>
+          {mapPolyline.length > 1 && (
+            <Polyline coordinates={mapPolyline} strokeColor={colors.primary} strokeWidth={4} />
+          )}
+        </MapView>
 
         {isActive && (
           <View style={styles.statsRow}>

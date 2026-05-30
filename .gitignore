@@ -45,5 +45,8 @@ Thumbs.db
 *.orig.*
 .kotlin/
 
+# Google Play service account key — must never be committed (contains private credentials)
+google-play-service-account.json
+
 # TypeScript
 *.tsbuildinfo

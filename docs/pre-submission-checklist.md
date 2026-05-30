@@ -22,7 +22,7 @@ Items marked with a store badge (iOS / Android) apply only to that platform.
 
 ## EAS Secrets
 
-All secrets must be set before `eas build --profile production` runs. Verify with `eas secret:list`.
+All secrets must be set before `eas build --profile production` runs. Verify with `eas env:list`.
 
 - [ ] `GOOGLE_MAPS_ANDROID_KEY` — Android map API key (Google Cloud Console)
 - [ ] `SENTRY_DSN` — Sentry project DSN (Sentry dashboard → Project Settings → Client Keys)

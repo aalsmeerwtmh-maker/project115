@@ -258,10 +258,10 @@ All secrets are set at the EAS project scope. Replace `<value>` with the real cr
 
 ```bash
 # Set a secret
-eas secret:create --name SECRET_NAME --value <value> --scope project
+eas env:create --name SECRET_NAME --value <value> --scope project
 
 # List secrets (values are masked)
-eas secret:list
+eas env:list
 ```
 
 | Secret name | Where to get it | Required for |

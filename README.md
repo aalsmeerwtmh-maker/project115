@@ -274,7 +274,7 @@ iOS uses Apple Maps and requires no key.
 
 To add the key to EAS:
 ```bash
-eas secret:create --scope project --name GOOGLE_MAPS_ANDROID_KEY --value <your-key>
+eas env:create --scope project --name GOOGLE_MAPS_ANDROID_KEY --value <your-key>
 ```
 
 For local development, create a `.env` file at the project root (it is gitignored):

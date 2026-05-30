@@ -66,10 +66,6 @@ export function DiscoveryToast({ visible, tokensAwarded, onDismiss }: DiscoveryT
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible]);
 
-  if (!visible && translateY.value <= -TOAST_HEIGHT) {
-    return null;
-  }
-
   return (
     <Animated.View style={[styles.toast, animatedStyle]} pointerEvents="none">
       <Text style={styles.text} allowFontScaling>

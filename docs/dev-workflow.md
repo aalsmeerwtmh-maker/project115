@@ -6,21 +6,35 @@ Day-to-day guide for working in this repository. Covers environment setup, commo
 
 ## Environment setup
 
-### WSL2 + Tailscale
+### Per-developer setup (do this once)
 
-The dev machine runs Windows with WSL2. The Metro bundler runs inside WSL2, but the physical device is on the local network. WSL2 does not expose itself on the local network by default, so the device cannot reach Metro via the LAN IP.
-
-**The fix:** Tailscale creates a VPN mesh that gives both the WSL2 instance and the physical device stable IP addresses that can reach each other. The Tailscale IP of the WSL2 machine is `100.69.13.58`. This IP is baked into the `npm start` script:
+Each developer has their own Tailscale IP and must create a local `.env.local` file (gitignored — never committed):
 
 ```bash
-npm start
-# expands to:
-REACT_NATIVE_PACKAGER_HOSTNAME=100.69.13.58 expo start --dev-client
+# 1. Find your Tailscale IP
+tailscale ip -4
+
+# 2. Create .env.local from the example
+cp .env.example .env.local
+# Then edit .env.local and replace the placeholder with your actual Tailscale IP
 ```
+
+`.env.local` contains:
+```
+REACT_NATIVE_PACKAGER_HOSTNAME=<your-tailscale-ip>
+```
+
+Metro reads `.env.local` automatically on `npm start`.
+
+### WSL2 + Tailscale
+
+The Metro bundler runs inside WSL2, but the physical device needs to reach it over the network. WSL2 does not expose itself on the local LAN by default.
+
+**The fix:** Tailscale creates a VPN mesh that gives both the WSL2 instance and the physical device stable IPs that can reach each other. Each developer sets their own Tailscale IP in `.env.local` (see above).
 
 Prerequisites:
 - Tailscale installed and logged in on both the Windows host (and by extension WSL2) and the Android/iOS device.
-- Both devices in the same Tailscale network (tailnet).
+- Both devices joined to the same Tailscale network (tailnet).
 
 ### ADB wireless debugging (no USB required)
 

@@ -53,18 +53,23 @@ src/
 
 ## Starting Metro (WSL2 + Tailscale)
 
-The dev machine runs WSL2. The Tailscale IP (`100.69.13.58`) must be passed so Metro advertises an address the physical Android device can reach over the Tailscale VPN. The `npm start` script already encodes this:
+The dev machine runs WSL2. Metro must advertise an IP the physical Android device can reach over Tailscale. Each developer sets their own Tailscale IP in `.env.local` (gitignored):
 
 ```bash
+# 1. Find your Tailscale IP
+tailscale ip -4
+
+# 2. Create .env.local (copy from .env.example)
+echo "REACT_NATIVE_PACKAGER_HOSTNAME=<your-tailscale-ip>" > .env.local
+
+# 3. Start Metro — it reads .env.local automatically
 npm start
-# expands to:
-REACT_NATIVE_PACKAGER_HOSTNAME=100.69.13.58 expo start --dev-client
 ```
 
-To also clear the Metro cache (required after changing native modules or `babel.config.js`):
+To clear the Metro cache (required after changing native modules or `babel.config.js`):
 
 ```bash
-REACT_NATIVE_PACKAGER_HOSTNAME=100.69.13.58 npx expo start -c --dev-client
+npm start -- -c
 ```
 
 ---

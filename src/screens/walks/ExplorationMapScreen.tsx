@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ActivityIndicator, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Polygon } from 'react-native-maps';
+import Constants from 'expo-constants';
 import { getCheckinEvents } from '@/db/repositories/events';
 import type { CheckinPayload } from '@/db/repositories/events';
 import { EmptyState } from '@/components/EmptyState';
@@ -10,6 +11,9 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
+
+const androidMapsKey = Constants.expoConfig?.android?.config?.googleMaps?.apiKey;
+const MAP_AVAILABLE = Platform.OS !== 'android' || !!androidMapsKey;
 
 // Cell size in degrees — matches cellKey() in useWalkSession (~0.0005° ≈ 55 m).
 const CELL_SIZE = 0.0005;
@@ -100,7 +104,7 @@ export function ExplorationMapScreen() {
         <EmptyState heading="No areas discovered yet." />
       )}
 
-      {!loading && !error && cells.length > 0 && (
+      {!loading && !error && cells.length > 0 && MAP_AVAILABLE && (
         <MapView style={styles.map} showsUserLocation>
           {cells.map((cell) => (
             <Polygon
@@ -112,6 +116,20 @@ export function ExplorationMapScreen() {
             />
           ))}
         </MapView>
+      )}
+
+      {!loading && !error && cells.length > 0 && !MAP_AVAILABLE && (
+        <View style={styles.mapFallback}>
+          <Text style={styles.mapFallbackTitle}>Map unavailable</Text>
+          <Text style={styles.mapFallbackBody}>
+            Google Maps API key not configured.{'\n'}Add{' '}
+            <Text style={styles.mapFallbackCode}>GOOGLE_MAPS_ANDROID_KEY</Text> via{' '}
+            <Text style={styles.mapFallbackCode}>eas secret:create</Text> and rebuild.
+          </Text>
+          <Text style={[styles.mapFallbackBody, { marginTop: spacing.sm }]}>
+            {cells.length} area{cells.length !== 1 ? 's' : ''} discovered so far.
+          </Text>
+        </View>
       )}
     </SafeAreaView>
   );
@@ -136,5 +154,26 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  mapFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: spacing.lg,
+  },
+  mapFallbackTitle: {
+    ...typography.heading3,
+    color: colors.textSecondary,
+    marginBottom: spacing.sm,
+  },
+  mapFallbackBody: {
+    ...typography.caption,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  mapFallbackCode: {
+    fontFamily: 'monospace',
+    color: colors.primary,
   },
 });

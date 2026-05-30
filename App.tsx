@@ -27,7 +27,7 @@ try {
 import { Component, useEffect, useState } from 'react';
 import type { ErrorInfo, ReactNode } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { InteractionManager, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { initDb } from '@/db/client';
 import { getProgress, setProgress } from '@/db/repositories/progress';
@@ -117,9 +117,8 @@ function App() {
       const anonymousId = await getOrCreateAnonymousId();
       identifyAnonymousUser(anonymousId);
 
-      // Defer non-critical work until after the first frame is painted.
-      InteractionManager.runAfterInteractions(() => {
-        // Schedule daily walk reminder after settings are hydrated.
+      // Defer non-critical work until the JS thread is idle.
+      requestIdleCallback(() => {
         const { notificationsEnabled, quietHoursStart, quietHoursEnd } =
           useSettingsStore.getState();
         if (notificationsEnabled) {
@@ -142,8 +141,8 @@ function App() {
   useEffect(() => {
     let cleanupListeners: (() => void) | null = null;
 
-    // Defer IAP init until after interactions to avoid blocking cold start.
-    const task = InteractionManager.runAfterInteractions(() => {
+    // Defer IAP init until the JS thread is idle to avoid blocking cold start.
+    const taskId = requestIdleCallback(() => {
       initIAP()
         .then(() => {
           cleanupListeners = setupPurchaseListeners();
@@ -152,7 +151,7 @@ function App() {
     });
 
     return () => {
-      task.cancel();
+      cancelIdleCallback(taskId);
       cleanupListeners?.();
       teardownIAP().catch(() => {});
     };

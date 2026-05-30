@@ -8,6 +8,7 @@ interface PrimaryButtonProps {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
+  accessibilityLabel?: string;
 }
 
 export function PrimaryButton({
@@ -15,6 +16,7 @@ export function PrimaryButton({
   onPress,
   disabled = false,
   loading = false,
+  accessibilityLabel,
 }: PrimaryButtonProps) {
   const isDisabled = disabled || loading;
 
@@ -24,11 +26,16 @@ export function PrimaryButton({
       onPress={onPress}
       disabled={isDisabled}
       activeOpacity={0.75}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled: isDisabled }}
     >
       {loading ? (
         <ActivityIndicator color={colors.surface} />
       ) : (
-        <Text style={styles.label}>{label}</Text>
+        <Text style={styles.label} allowFontScaling>
+          {label}
+        </Text>
       )}
     </TouchableOpacity>
   );

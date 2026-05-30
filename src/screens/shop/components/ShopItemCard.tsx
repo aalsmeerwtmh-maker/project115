@@ -3,7 +3,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 import type { EquipmentItem } from '@/game/config';
 
 export type ItemDisplayState = 'buy' | 'equip' | 'unequip' | 'equipped';
@@ -33,7 +33,8 @@ export function ShopItemCard({
     if (displayState === 'buy') {
       return (
         <PrimaryButton
-          label={`${en.shop.buyButton} · ${item.tokenCost}`}
+          label={`${t.shop.buyButton} · ${item.tokenCost}`}
+          accessibilityLabel={`Buy ${item.name} for ${item.tokenCost} tokens`}
           onPress={onBuy}
           disabled={!canAfford || loading}
           loading={loading}
@@ -43,7 +44,8 @@ export function ShopItemCard({
     if (displayState === 'equip') {
       return (
         <PrimaryButton
-          label={en.shop.equipButton}
+          label={t.shop.equipButton}
+          accessibilityLabel={`Equip ${item.name}`}
           onPress={onEquip}
           disabled={loading}
           loading={loading}
@@ -53,7 +55,8 @@ export function ShopItemCard({
     if (displayState === 'unequip' || displayState === 'equipped') {
       return (
         <PrimaryButton
-          label={en.shop.unequipButton}
+          label={t.shop.unequipButton}
+          accessibilityLabel={`Unequip ${item.name}`}
           onPress={onUnequip}
           disabled={loading}
           loading={loading}
@@ -71,8 +74,8 @@ export function ShopItemCard({
           <View style={styles.ownedBadge}>
             <Text style={styles.ownedText}>
               {displayState === 'equipped' || displayState === 'unequip'
-                ? en.shop.equippedBadge
-                : en.shop.ownedBadge}
+                ? t.shop.equippedBadge
+                : t.shop.ownedBadge}
             </Text>
           </View>
         )}

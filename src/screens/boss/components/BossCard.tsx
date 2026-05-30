@@ -3,7 +3,7 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
-import { en } from '@/i18n/en';
+import { t } from '@/i18n/index';
 import type { BossDefinition } from '@/game/config';
 import type { Pet } from '@/db/schema';
 import { canChallengeBoss } from '@/game/bosses';
@@ -17,19 +17,19 @@ function buildRequirements(boss: BossDefinition, pet: Pet, streakDays: number): 
   const stageOrder: Pet['stage'][] = ['baby', 'child', 'adult', 'elder'];
   return [
     {
-      label: en.boss.reqStreak(boss.requiredStreakDays),
+      label: t.boss.reqStreak(boss.requiredStreakDays),
       met: streakDays >= boss.requiredStreakDays,
     },
     {
-      label: en.boss.reqGrowth(boss.requiredGrowthValue),
+      label: t.boss.reqGrowth(boss.requiredGrowthValue),
       met: pet.growthValue >= boss.requiredGrowthValue,
     },
     {
-      label: en.boss.reqStage(boss.requiredStage),
+      label: t.boss.reqStage(boss.requiredStage),
       met: stageOrder.indexOf(pet.stage) >= stageOrder.indexOf(boss.requiredStage),
     },
     {
-      label: en.boss.reqStamina(boss.requiredStamina),
+      label: t.boss.reqStamina(boss.requiredStamina),
       met: pet.stamina >= boss.requiredStamina,
     },
   ];
@@ -40,7 +40,7 @@ function buildCooldownLabel(retryUntilMs: number, nowMs: number): string {
   const totalMinutes = Math.floor(remainMs / 60_000);
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  return en.boss.retryCountdown(h, m);
+  return t.boss.retryCountdown(h, m);
 }
 
 interface BossCardProps {
@@ -76,7 +76,11 @@ export function BossCard({
 
       <View style={styles.requirementsList}>
         {requirements.map((req) => (
-          <View key={req.label} style={styles.requirementRow}>
+          <View
+            key={req.label}
+            style={styles.requirementRow}
+            accessibilityLabel={`${req.label}: ${req.met ? 'met' : 'not met'}`}
+          >
             <Text style={[styles.reqIcon, req.met ? styles.reqMet : styles.reqUnmet]}>
               {req.met ? '✓' : '✗'}
             </Text>
@@ -89,7 +93,7 @@ export function BossCard({
 
       {defeated ? (
         <View style={styles.defeatedBadge}>
-          <Text style={styles.defeatedText}>{en.boss.defeatedBadge}</Text>
+          <Text style={styles.defeatedText}>{t.boss.defeatedBadge}</Text>
         </View>
       ) : inCooldown ? (
         <View style={styles.cooldownBadge}>
@@ -97,7 +101,7 @@ export function BossCard({
         </View>
       ) : (
         <PrimaryButton
-          label={en.boss.challengeButton}
+          label={t.boss.challengeButton}
           onPress={onChallenge}
           disabled={challengeDisabled}
           loading={loading}

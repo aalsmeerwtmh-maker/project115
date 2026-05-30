@@ -47,7 +47,12 @@ export function StepRing({ steps, goal, size = 200, strokeWidth = 14 }: StepRing
   const goalReached = steps >= goal;
 
   return (
-    <View style={[styles.wrapper, { width: size, height: size }]}>
+    <View
+      style={[styles.wrapper, { width: size, height: size }]}
+      accessibilityRole="progressbar"
+      accessibilityValue={{ min: 0, max: goal, now: steps }}
+      accessibilityLabel={`${steps} of ${goal} steps`}
+    >
       {/* Track circle */}
       <View
         style={[

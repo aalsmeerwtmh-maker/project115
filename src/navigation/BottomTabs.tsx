@@ -16,10 +16,26 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 export function BottomTabs() {
   return (
     <Tab.Navigator>
-      <Tab.Screen name="Home" component={HomeScreen} />
-      <Tab.Screen name="Walks" component={WalksScreen} />
-      <Tab.Screen name="Goals" component={GoalsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen
+        name="Home"
+        component={HomeScreen}
+        options={{ tabBarAccessibilityLabel: 'Home' }}
+      />
+      <Tab.Screen
+        name="Walks"
+        component={WalksScreen}
+        options={{ tabBarAccessibilityLabel: 'Walks' }}
+      />
+      <Tab.Screen
+        name="Goals"
+        component={GoalsScreen}
+        options={{ tabBarAccessibilityLabel: 'Goals' }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ tabBarAccessibilityLabel: 'Profile' }}
+      />
     </Tab.Navigator>
   );
 }

@@ -236,7 +236,7 @@ export const GAME_CONFIG: GameConfig = {
     },
   ],
 
-  ar: { depthEnabled: true },
+  ar: { depthEnabled: false },
 
   walkEvents: {
     intervalMinutes: 10,

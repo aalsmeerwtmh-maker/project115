@@ -63,7 +63,7 @@ export const IDLE_ANIMATION_NAME = 'petIdlePulse';
 // Orange material for the placeholder sphere so it is clearly visible.
 ViroMaterials.createMaterials({
   petPlaceholder: {
-    lightingModel: 'Blinn',
+    lightingModel: 'Constant',
     diffuseColor: '#F5A623',
   },
 });
@@ -85,9 +85,8 @@ export const PLANE_ALIGNMENT: 'HorizontalUpward' | 'Horizontal' = Platform.selec
 
 // Hit-test result priority: prefer the most stable/accurate type.
 export const HIT_TEST_PRIORITY: string[] = [
-  'ExistingPlanePoint',
+  'ExistingPlane',
   'EstimatedHorizontalPlane',
-  'DepthPoint',
   'FeaturePoint',
 ];
 

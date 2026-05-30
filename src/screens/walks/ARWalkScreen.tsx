@@ -47,7 +47,10 @@ function getHintText(status: PlacementStatus): string {
 
 function ScanningRing() {
   const opacity = useSharedValue(1);
-  opacity.value = withRepeat(withTiming(0.35, { duration: 900 }), -1, true);
+
+  useEffect(() => {
+    opacity.value = withRepeat(withTiming(0.35, { duration: 900 }), -1, true);
+  }, [opacity]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
@@ -108,6 +111,15 @@ export function ARWalkScreen() {
 
   function handlePlacementStateChanged(status: PlacementStatus) {
     setPlacementStatus(status);
+  }
+
+  // PetARScene calls this on mount to hand us its placement trigger function.
+  // We store it in a ref and call it when the overlay is pressed.
+  // Direct callback avoids the viroAppProps re-render problem: sceneNavigator is
+  // a mutated class field — the scene component never re-renders on prop changes.
+  const tapHandlerRef = useRef<(() => void) | null>(null);
+  function registerTapHandler(fn: () => void) {
+    tapHandlerRef.current = fn;
   }
 
   // Whether the thermal warning banner is shown.
@@ -212,12 +224,13 @@ export function ARWalkScreen() {
         <ViroARSceneNavigator
           style={styles.arNavigator}
           initialScene={{ scene: PetARScene }}
-          autofocus
+          autofocus={placementStatus !== 'placed'}
           shadowsEnabled={false}
           depthEnabled={GAME_CONFIG.ar.depthEnabled}
           viroAppProps={{
             onMarkerFound: handleMarkerFound,
             onPlacementStateChanged: handlePlacementStateChanged,
+            registerTapHandler,
           }}
         />
       )}
@@ -235,6 +248,17 @@ export function ARWalkScreen() {
           <Text style={styles.pausedTitle}>{t.ar.arPaused}</Text>
           <Text style={styles.pausedSubtitle}>{t.ar.tapToResume}</Text>
         </TouchableOpacity>
+      )}
+
+      {/* Transparent tap target — active only when ready to place. Viro onClick
+          does not fire on AR background (no 3D geometry to hit), so we capture
+          taps here in RN and pass tapCount into the scene via viroAppProps. */}
+      {arActive && placementStatus === 'ready' && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => tapHandlerRef.current?.()}
+        />
       )}
 
       {/* Scanning ring — shown while AR is active and pet has not yet been placed */}

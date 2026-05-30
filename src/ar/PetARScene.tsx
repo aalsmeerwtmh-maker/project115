@@ -1,73 +1,87 @@
 /**
- * PetARScene — Viro AR scene that places the user's pet on a detected surface
- * via hit-test, then locks it to a fixed world position to prevent drift.
+ * PetARScene — Viro AR scene that places the user's pet on a detected surface.
  *
  * PLACEHOLDER MODEL NOTE:
  * assets/ar/pet.glb does not exist yet and must NOT be generated or sourced externally —
  * all art is human-authored by the team. Until the file is delivered, a ViroSphere
- * is rendered as a stand-in. To switch to the real model, replace the <ViroSphere>
- * block with:
+ * is rendered as a stand-in. Replace the ViroSphere block with Viro3DObject once the
+ * file is delivered (see comment near the ViroSphere below).
  *
- *   <Viro3DObject
- *     source={PET_MODEL_PATH}
- *     position={[0, 0, 0]}
- *     scale={[0.2, 0.2, 0.2]}
- *     type="GLB"
- *     animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: true }}
- *   />
- *
- * Hit-test placement flow:
+ * Placement flow:
  * 1. Scene opens → status: 'scanning'
- * 2. onAnchorFound fires (ARCore found first plane) → status: 'ready'
- * 3. User taps → onClick on ViroARScene → performARHitTestWithPosition
- * 4. Highest-priority hit result → status: 'placed' with fixed world position
- * 5. ViroNode renders pet at that fixed position — not anchored to a live plane → no drift
+ * 2. onTrackingUpdated fires TRACKING_LIMITED or TRACKING_NORMAL → status: 'ready';
+ *    ARWalkScreen shows "Tap to place your pet" and mounts the tap overlay.
+ * 3. onCameraARHitTest fires every frame with hit-test results from the camera centre.
+ *    The best result is cached in latestHitRef.
+ * 4. User taps → ARWalkScreen calls the registered tap handler.
+ *    Handler reads latestHitRef and places the pet there → status: 'placed'.
+ * 5. ViroNode renders the pet at that fixed world position — no drift.
+ *
+ * Why onCameraARHitTest instead of performARHitTestWithPoint:
+ * performARHitTestWithPoint(x, y) consistently returns 0 results regardless of
+ * coordinate system — it appears to be unreliable in this version of react-viro.
+ * onCameraARHitTest is Viro's own continuous native pipeline and reliably produces
+ * hit results when the camera is pointed at a real-world surface.
+ *
+ * Why named prop instead of arguments[0]:
+ * Babel's arrow-function transform hoists `arguments` to the nearest non-arrow scope.
+ * In a strict-mode module that scope has no `arguments` object — every access returns
+ * undefined. Receiving sceneNavigator as a real named prop is safe in all environments.
  */
-import { useRef, useState } from 'react';
-import { ViroARScene, ViroAmbientLight, ViroNode, ViroSphere } from '@reactvision/react-viro';
-import type { ViroAnchorFoundMap, ViroARHitTestResult } from '@reactvision/react-viro';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ViroARScene,
+  ViroAmbientLight,
+  ViroNode,
+  ViroSphere,
+  ViroTrackingStateConstants,
+} from '@reactvision/react-viro';
+import type { ViroCameraARHitTest, ViroARHitTestResult } from '@reactvision/react-viro';
 
-// Register animations, materials, and expose the animation name constant.
-import { IDLE_ANIMATION_NAME, PLANE_ALIGNMENT, HIT_TEST_PRIORITY } from './arResources';
+import { IDLE_ANIMATION_NAME, HIT_TEST_PRIORITY } from './arResources';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+type PlacementStatus = 'scanning' | 'ready' | 'placed';
 
 type PlacementState =
   | { status: 'scanning' }
   | { status: 'ready' }
   | { status: 'placed'; position: [number, number, number] };
 
+type ViroAppProps = {
+  onPlacementStateChanged?: (status: PlacementStatus) => void;
+  registerTapHandler?: (fn: () => void) => void;
+};
+
+type PetARSceneProps = {
+  sceneNavigator: {
+    viroAppProps?: ViroAppProps;
+  };
+};
+
 // ---------------------------------------------------------------------------
 // Component
 // ---------------------------------------------------------------------------
 
-/**
- * The AR scene that shows the pet at a hit-test-placed world position.
- *
- * Exported as a zero-argument function to satisfy the ViroARSceneNavigator
- * `initialScene.scene` type, which is declared as `() => React.JSX.Element`.
- * Viro will inject navigator props at runtime regardless of the TS signature.
- */
-export function PetARScene() {
-  // Read viroAppProps injected at runtime by ViroARSceneNavigator.
-  // Typed via `as any` since Viro injects these outside the normal prop flow.
-  // eslint-disable-next-line prefer-rest-params, @typescript-eslint/no-explicit-any
-  const { onPlacementStateChanged } = (arguments[0] as any)?.sceneNavigator?.viroAppProps ?? {};
-
+export function PetARScene({ sceneNavigator }: PetARSceneProps) {
   const arSceneRef = useRef<ViroARScene>(null);
   const [placement, setPlacement] = useState<PlacementState>({ status: 'scanning' });
 
-  // When ARCore finds its first plane the scene is ready for placement.
-  function handleAnchorFound(_anchor: ViroAnchorFoundMap) {
-    if (placement.status === 'scanning') {
-      setPlacement({ status: 'ready' });
-      onPlacementStateChanged?.('ready');
-    }
-  }
+  // Always-current placement state for use inside closures.
+  const placementRef = useRef(placement);
+  placementRef.current = placement;
 
-  // Pick the highest-priority result from HIT_TEST_PRIORITY.
+  // Cache the best hit-test result from onCameraARHitTest so the tap handler
+  // can use it synchronously without calling performARHitTestWithPoint.
+  const latestHitRef = useRef<ViroARHitTestResult | null>(null);
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+
   function pickBestResult(results: ViroARHitTestResult[]): ViroARHitTestResult | null {
     for (const priorityType of HIT_TEST_PRIORITY) {
       const match = results.find((r) => r.type === priorityType);
@@ -76,46 +90,69 @@ export function PetARScene() {
     return results[0] ?? null;
   }
 
-  // Called by ViroARScene when the user taps the scene.
-  function handleClick(position: [number, number, number]) {
-    // Once placed, further taps are no-ops.
-    if (placement.status === 'placed') return;
-    // Only allow placement once a plane has been found.
-    if (placement.status !== 'ready') return;
+  // ---------------------------------------------------------------------------
+  // Tracking
+  // ---------------------------------------------------------------------------
 
-    arSceneRef.current
-      ?.performARHitTestWithPosition(position)
-      .then((results: ViroARHitTestResult[]) => {
-        const best = pickBestResult(results);
-        if (!best) return;
-        const pos = best.transform.position;
-        setPlacement({ status: 'placed', position: pos });
-        onPlacementStateChanged?.('placed');
-      })
-      .catch((err: unknown) => {
-        console.warn('[PetARScene] performARHitTestWithPosition failed:', err);
-      });
+  function handleTrackingUpdated(state: number) {
+    if (
+      placementRef.current.status === 'scanning' &&
+      state >= ViroTrackingStateConstants.TRACKING_LIMITED
+    ) {
+      setPlacement({ status: 'ready' });
+      sceneNavigator.viroAppProps?.onPlacementStateChanged?.('ready');
+    }
   }
+
+  // ---------------------------------------------------------------------------
+  // Continuous camera hit-test (disabled after placement)
+  // ---------------------------------------------------------------------------
+
+  function handleCameraHitTest(event: ViroCameraARHitTest) {
+    const best = pickBestResult(event.hitTestResults);
+    if (best) {
+      latestHitRef.current = best;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tap handler registration (runs once on mount)
+  // ---------------------------------------------------------------------------
+
+  useEffect(() => {
+    const { registerTapHandler } = sceneNavigator.viroAppProps ?? {};
+    registerTapHandler?.(() => {
+      if (placementRef.current.status !== 'ready') return;
+      const hit = latestHitRef.current;
+      if (!hit) {
+        console.warn('[PetARScene] tapped but no hit result cached yet — keep camera on surface');
+        return;
+      }
+      const pos = hit.transform.position;
+      setPlacement({ status: 'placed', position: pos });
+      sceneNavigator.viroAppProps?.onPlacementStateChanged?.('placed');
+    });
+  // sceneNavigator is a stable reference — safe to omit from deps.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <ViroARScene
       ref={arSceneRef}
-      anchorDetectionTypes={[PLANE_ALIGNMENT]}
-      onAnchorFound={handleAnchorFound}
-      onClick={handleClick}
+      anchorDetectionTypes={placement.status !== 'placed' ? ['planesHorizontal'] : []}
+      onTrackingUpdated={handleTrackingUpdated}
+      onCameraARHitTest={placement.status !== 'placed' ? handleCameraHitTest : undefined}
     >
-      {/* Global ambient light so the placeholder geometry is visible */}
       <ViroAmbientLight color="#FFFFFF" intensity={200} />
 
       {placement.status === 'placed' && (
         <ViroNode position={placement.position}>
           {/*
-           * PLACEHOLDER pet: orange sphere with idle pulse animation.
-           * ViroAnimatedComponent is avoided — it has a this-binding bug when
-           * the component re-renders after plane selection.
-           * Animation prop is applied directly on ViroSphere instead.
-           *
-           * Replace with Viro3DObject once assets/ar/pet.glb is delivered:
+           * PLACEHOLDER: replace with Viro3DObject once assets/ar/pet.glb is delivered:
            *   <Viro3DObject
            *     source={PET_MODEL_PATH}
            *     position={[0, 0, 0]}

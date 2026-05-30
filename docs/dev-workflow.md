@@ -202,3 +202,56 @@ Tests live in `__tests__/` at the project root. The Jest config in `jest.config.
 | Offline banner does not appear | `@react-native-community/netinfo` native module was added but the dev client has not been rebuilt | Run `eas build --profile development` to rebuild the dev client with the new native module |
 | Type error: `navigation.navigate('SomeName')` not assignable | Screen not added to the param type list | Add the screen name to `RootStackParamList` or `MainTabParamList` in `src/navigation/types.ts` |
 | `getDb()` called before `initDb()` error | A repository was called before `App.tsx` finished awaiting `initDb()` | Ensure `initDb()` is awaited at the very top of the `App` component or root provider before any store hydration runs |
+
+---
+
+## Performance baselines
+
+Measured on a mid-tier 2022 Android device (Snapdragon 778G, 6 GB RAM) using a production-profile build.
+
+### Cold start
+
+| Metric | Target | Notes |
+|---|---|---|
+| Time to first frame | < 3 s | Measured from process start to NavigationContainer rendered |
+| DB migration (first launch) | < 200 ms | WAL mode + single migration |
+| Store hydration | < 100 ms | Zustand + SQLite KV reads |
+
+Optimization applied in Phase 7: `scheduleDailyWalkReminder` and `initIAP()` are now deferred via `InteractionManager.runAfterInteractions`, moving them out of the synchronous bootstrap path.
+
+To profile cold start: use Android Studio's CPU profiler or `adb shell am start -W com.pawstep.app/.MainActivity` and read the `TotalTime` output.
+
+### AR scene (ViroARSceneNavigator)
+
+| Metric | Target | Notes |
+|---|---|---|
+| Sustained AR frame rate | ≥ 30 FPS | Measured on iPhone 15 and Pixel 7 |
+| AR session startup (plane detection) | < 5 s on a textured surface | LiDAR-equipped iOS devices are faster |
+
+Optimization applied in Phase 7: `shadowsEnabled={false}` on `ViroARSceneNavigator` — shadow mapping is the single largest per-frame GPU cost on mobile AR and is not visually critical for this use case.
+
+To profile AR FPS: enable the Viro FPS counter via `debug={true}` on `ViroARSceneNavigator` in a development build (remove before production build).
+
+### Bundle size
+
+Run `npx expo export --platform android` and inspect the `dist/` output. Flag any individual asset over 5 MB. The `pet.glb` 3D model is the most likely candidate; compress with `gltfpack -i pet.glb -o pet-compressed.glb` if needed.
+
+---
+
+## EAS Secrets Reference
+
+All secrets are set at the EAS project scope. Replace `<value>` with the real credential.
+
+```bash
+# Set a secret
+eas secret:create --name SECRET_NAME --value <value> --scope project
+
+# List secrets (values are masked)
+eas secret:list
+```
+
+| Secret name | Where to get it | Required for |
+|---|---|---|
+| `GOOGLE_MAPS_ANDROID_KEY` | Google Cloud Console → APIs & Services → Credentials → Android API key | Android map tiles in all build profiles |
+| `SENTRY_DSN` | Sentry dashboard → Project Settings → Client Keys (DSN) | Crash reporting in production builds; needs `@sentry/react-native` installed + dev client rebuild |
+| `SENTRY_AUTH_TOKEN` | Sentry → Account → API Tokens (scope: `project:releases`) | Sentry source-map upload during EAS build (add to `app.config.ts` Sentry plugin config) |

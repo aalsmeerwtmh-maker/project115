@@ -175,6 +175,7 @@ export function ARWalkScreen() {
           style={styles.arNavigator}
           initialScene={{ scene: PetARScene }}
           autofocus
+          shadowsEnabled={false}
           viroAppProps={{ onMarkerFound: handleMarkerFound }}
         />
       )}

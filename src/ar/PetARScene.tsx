@@ -12,10 +12,23 @@
  * 2. onTrackingUpdated fires TRACKING_LIMITED or TRACKING_NORMAL → status: 'ready';
  *    ARWalkScreen shows "Tap to place your pet" and mounts the tap overlay.
  * 3. onCameraARHitTest fires every frame with hit-test results from the camera centre.
- *    The best result is cached in latestHitRef.
+ *    The best result (filtered by type priority, camera distance, and depth confidence)
+ *    is cached in latestHitRef.
  * 4. User taps → ARWalkScreen calls the registered tap handler.
- *    Handler reads latestHitRef and places the pet there → status: 'placed'.
+ *    Handler reads latestHitRef, places the pet → calls onPlacementStateChanged('placing').
+ *    ARWalkScreen shows a "Placing…" banner for placingFeedbackMs, then transitions to 'placed'.
  * 5. ViroNode renders the pet at that fixed world position — no drift.
+ *
+ * Distance filtering (why camera-relative, not origin-relative):
+ * transform.position from onCameraARHitTest is in world space anchored to the AR
+ * session origin. After the user walks a few metres the session origin is behind them —
+ * sqrt(x²+y²+z²) gives distance from start, not from the camera. cameraOrientation.position
+ * in the same event is the camera's current world position and is the correct reference point.
+ *
+ * Why ExistingPlaneUsingExtent before ExistingPlane:
+ * ExistingPlane intersects the plane's infinite mathematical extension; a near-horizontal
+ * ray can hit a confirmed floor plane metres away. ExistingPlaneUsingExtent only fires
+ * when the intersection is inside the plane's measured polygon — much tighter.
  *
  * Why onCameraARHitTest instead of performARHitTestWithPoint:
  * performARHitTestWithPoint(x, y) consistently returns 0 results regardless of
@@ -39,12 +52,13 @@ import {
 import type { ViroCameraARHitTest, ViroARHitTestResult } from '@reactvision/react-viro';
 
 import { IDLE_ANIMATION_NAME, HIT_TEST_PRIORITY } from './arResources';
+import { GAME_CONFIG } from '@/game/config';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type PlacementStatus = 'scanning' | 'ready' | 'placed';
+type PlacementStatus = 'scanning' | 'ready' | 'placing' | 'placed';
 
 type PlacementState =
   | { status: 'scanning' }
@@ -61,6 +75,26 @@ type PetARSceneProps = {
     viroAppProps?: ViroAppProps;
   };
 };
+
+// ---------------------------------------------------------------------------
+// Distance filtering (module-level — computed once, not per render)
+// ---------------------------------------------------------------------------
+
+const HIT_MAX_DISTANCE: Record<string, number> = {
+  ExistingPlaneUsingExtent: GAME_CONFIG.ar.hitTestMaxDistances.existingPlaneUsingExtent,
+  ExistingPlane: GAME_CONFIG.ar.hitTestMaxDistances.existingPlane,
+  EstimatedHorizontalPlane: GAME_CONFIG.ar.hitTestMaxDistances.estimatedHorizontalPlane,
+  FeaturePoint: GAME_CONFIG.ar.hitTestMaxDistances.featurePoint,
+};
+
+function distanceFromCamera(
+  hit: ViroARHitTestResult,
+  camPos: [number, number, number],
+): number {
+  const [hx, hy, hz] = hit.transform.position;
+  const [cx, cy, cz] = camPos;
+  return Math.sqrt((hx - cx) ** 2 + (hy - cy) ** 2 + (hz - cz) ** 2);
+}
 
 // ---------------------------------------------------------------------------
 // Component
@@ -82,12 +116,24 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
   // Helpers
   // ---------------------------------------------------------------------------
 
-  function pickBestResult(results: ViroARHitTestResult[]): ViroARHitTestResult | null {
+  function pickBestResult(
+    results: ViroARHitTestResult[],
+    camPos: [number, number, number],
+  ): ViroARHitTestResult | null {
     for (const priorityType of HIT_TEST_PRIORITY) {
-      const match = results.find((r) => r.type === priorityType);
-      if (match) return match;
+      const maxDist = HIT_MAX_DISTANCE[priorityType] ?? 3.0;
+      for (const r of results) {
+        if (r.type !== priorityType) continue;
+        if (distanceFromCamera(r, camPos) > maxDist) continue;
+        if (
+          r.hasDepthData &&
+          r.depthConfidence !== undefined &&
+          r.depthConfidence < GAME_CONFIG.ar.minDepthConfidence
+        ) continue;
+        return r;
+      }
     }
-    return results[0] ?? null;
+    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -109,9 +155,23 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
   // ---------------------------------------------------------------------------
 
   function handleCameraHitTest(event: ViroCameraARHitTest) {
-    const best = pickBestResult(event.hitTestResults);
+    const camPos = event.cameraOrientation.position as [number, number, number];
+    const results = event.hitTestResults;
+    if (__DEV__ && results.length > 0) {
+      const summary = results.map(r => {
+        const d = distanceFromCamera(r, camPos);
+        return `${r.type}@${d.toFixed(2)}m conf=${r.depthConfidence ?? 'n/a'}`;
+      }).join(' | ');
+      console.log(`[PetARScene] cam=${JSON.stringify(camPos)} hits: ${summary}`);
+    }
+    const best = pickBestResult(results, camPos);
     if (best) {
       latestHitRef.current = best;
+      if (__DEV__) {
+        console.log(`[PetARScene] ref SET: ${best.type}@${distanceFromCamera(best, camPos).toFixed(2)}m`);
+      }
+    } else if (__DEV__ && results.length > 0) {
+      console.log('[PetARScene] ref NOT set (all results filtered)');
     }
   }
 
@@ -122,6 +182,9 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
   useEffect(() => {
     const { registerTapHandler } = sceneNavigator.viroAppProps ?? {};
     registerTapHandler?.(() => {
+      if (__DEV__) {
+        console.log(`[PetARScene:tap] status=${placementRef.current.status} hit=${latestHitRef.current ? latestHitRef.current.type + '@' + distanceFromCamera(latestHitRef.current, [0,0,0]).toFixed(2) : 'null'}`);
+      }
       if (placementRef.current.status !== 'ready') return;
       const hit = latestHitRef.current;
       if (!hit) {
@@ -130,7 +193,9 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
       }
       const pos = hit.transform.position;
       setPlacement({ status: 'placed', position: pos });
-      sceneNavigator.viroAppProps?.onPlacementStateChanged?.('placed');
+      // 'placing' → ARWalkScreen shows feedback banner; ARWalkScreen transitions to
+      // 'placed' after GAME_CONFIG.ar.placingFeedbackMs so the ViroNode has time to render.
+      sceneNavigator.viroAppProps?.onPlacementStateChanged?.('placing');
     });
   // sceneNavigator is a stable reference — safe to omit from deps.
   // eslint-disable-next-line react-hooks/exhaustive-deps

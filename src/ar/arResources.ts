@@ -85,6 +85,7 @@ export const PLANE_ALIGNMENT: 'HorizontalUpward' | 'Horizontal' = Platform.selec
 
 // Hit-test result priority: prefer the most stable/accurate type.
 export const HIT_TEST_PRIORITY: string[] = [
+  'ExistingPlaneUsingExtent', // hit is within measured plane bounds — most reliable, won't false-positive at distance
   'ExistingPlane',
   'EstimatedHorizontalPlane',
   'FeaturePoint',

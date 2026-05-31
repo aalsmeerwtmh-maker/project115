@@ -137,6 +137,7 @@ export const en = {
     planeDetecting: 'Point camera at a flat surface…',
     scanning: 'Scanning for a surface…',
     tapToPlace: 'Tap to place your pet',
+    placing: 'Placing your pet…',
     placed: 'Pet placed!',
   },
 

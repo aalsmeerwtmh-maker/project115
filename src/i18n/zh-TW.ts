@@ -137,6 +137,7 @@ export const zhTW = {
     planeDetecting: '請將相機對準平面…',
     scanning: '正在掃描平面…',
     tapToPlace: '點擊放置你的寵物',
+    placing: '正在放置你的寵物…',
     placed: '寵物已放置！',
   },
 

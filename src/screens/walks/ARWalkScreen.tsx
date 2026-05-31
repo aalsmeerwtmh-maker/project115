@@ -37,11 +37,12 @@ import { GAME_CONFIG } from '@/game/config';
 // AR placement types and helpers
 // ---------------------------------------------------------------------------
 
-type PlacementStatus = 'scanning' | 'ready' | 'placed';
+type PlacementStatus = 'scanning' | 'ready' | 'placing' | 'placed';
 
 function getHintText(status: PlacementStatus): string {
   if (status === 'scanning') return t.ar.scanning;
   if (status === 'ready') return t.ar.tapToPlace;
+  if (status === 'placing') return t.ar.placing;
   return t.ar.placed;
 }
 
@@ -109,8 +110,25 @@ export function ARWalkScreen() {
   // Placement status driven by PetARScene via onPlacementStateChanged callback.
   const [placementStatus, setPlacementStatus] = useState<PlacementStatus>('scanning');
 
+  // Timer that transitions 'placing' → 'placed' after the ViroNode has had time to render.
+  const placingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearPlacingTimer() {
+    if (placingTimerRef.current !== null) {
+      clearTimeout(placingTimerRef.current);
+      placingTimerRef.current = null;
+    }
+  }
+
   function handlePlacementStateChanged(status: PlacementStatus) {
+    clearPlacingTimer();
     setPlacementStatus(status);
+    if (status === 'placing') {
+      placingTimerRef.current = setTimeout(() => {
+        placingTimerRef.current = null;
+        setPlacementStatus('placed');
+      }, GAME_CONFIG.ar.placingFeedbackMs);
+    }
   }
 
   // PetARScene calls this on mount to hand us its placement trigger function.
@@ -187,6 +205,9 @@ export function ARWalkScreen() {
     };
   }, [arActive, resetInactivityTimer, startThermalTimer, clearInactivityTimer, clearThermalTimer]);
 
+  // Clear placing timer on unmount.
+  useEffect(() => () => clearPlacingTimer(), []);
+
   // ---------------------------------------------------------------------------
   // Interaction handlers
   // ---------------------------------------------------------------------------
@@ -200,6 +221,7 @@ export function ARWalkScreen() {
 
   /** Resume after inactivity suspension. */
   function handleResume() {
+    clearPlacingTimer();
     setArActive(true);
     setShowThermalWarning(false);
     setPlacementStatus('scanning');
@@ -261,8 +283,8 @@ export function ARWalkScreen() {
         />
       )}
 
-      {/* Scanning ring — shown while AR is active and pet has not yet been placed */}
-      {arActive && placementStatus !== 'placed' && <ScanningRing />}
+      {/* Scanning ring — shown while scanning or ready; hidden once user has tapped */}
+      {arActive && (placementStatus === 'scanning' || placementStatus === 'ready') && <ScanningRing />}
 
       {/* Placement hint — shown while AR is active */}
       {arActive && (

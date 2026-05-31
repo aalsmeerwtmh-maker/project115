@@ -47,6 +47,17 @@ export interface WalkEvents {
 
 export interface ARConfig {
   depthEnabled: boolean; // ARCore Depth API; set false to save battery on low-end hardware
+  /** Maximum distance (metres) from the camera for each hit-test type before the result is rejected. */
+  hitTestMaxDistances: {
+    existingPlaneUsingExtent: number;
+    existingPlane: number;
+    estimatedHorizontalPlane: number;
+    featurePoint: number;
+  };
+  /** Minimum depth-confidence (0–1) when depth data is present; results below this are skipped. */
+  minDepthConfidence: number;
+  /** Milliseconds to show the "Placing…" state before transitioning to "placed". */
+  placingFeedbackMs: number;
 }
 
 export interface GameConfig {
@@ -236,7 +247,17 @@ export const GAME_CONFIG: GameConfig = {
     },
   ],
 
-  ar: { depthEnabled: false },
+  ar: {
+    depthEnabled: false,
+    hitTestMaxDistances: {
+      existingPlaneUsingExtent: 3.5,
+      existingPlane: 3.0,
+      estimatedHorizontalPlane: 2.5,
+      featurePoint: 1.5,
+    },
+    minDepthConfidence: 0.3,
+    placingFeedbackMs: 700,
+  },
 
   walkEvents: {
     intervalMinutes: 10,

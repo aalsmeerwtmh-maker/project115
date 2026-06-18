@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,10 +9,10 @@ import { useStepStore } from '@/stores/stepStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProgressStore } from '@/stores/progressStore';
 import { useStepCounter } from '@/hooks/useStepCounter';
-import { PetAvatar } from '@/components/PetAvatar';
-import { StepRing } from '@/components/StepRing';
+import { PetAvatar, PET_IMAGES } from '@/components/PetAvatar';
 import { DailyCheckinModal } from './components/DailyCheckinModal';
-import { getLastCheckinDate, setLastCheckinDate } from '@/db/repositories/progress';
+import { RenameModal } from './components/RenameModal';
+import { getLastCheckinDate, setLastCheckinDate, getProgress, setProgress } from '@/db/repositories/progress';
 import { computeStreak } from '@/game/streaks';
 import { isStreakMilestone, calcStreakBonus, checkinTokenAmount } from '@/game/tokens';
 import { hapticReward, hapticSuccess } from '@/services/haptics';
@@ -20,10 +20,10 @@ import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
+import { GAME_CONFIG } from '@/game/config';
 
 type HomeNav = NativeStackNavigationProp<RootStackParamList>;
 
-// Returns 'YYYY-MM-DD' in UTC for today.
 function todayUtcString(): string {
   const d = new Date();
   const year = d.getUTCFullYear();
@@ -32,9 +32,17 @@ function todayUtcString(): string {
   return `${year}-${month}-${day}`;
 }
 
+const PET_SPECIES = ['dog', 'cat', 'bird'] as const;
+type PetSpecies = typeof PET_SPECIES[number];
+
+const SPECIES_LABEL: Record<PetSpecies, string> = { dog: 'Dog', cat: 'Cat', bird: 'Bird' };
+
 export function HomeScreen() {
   const navigation = useNavigation<HomeNav>();
   const activePet = usePetStore((s) => s.activePet);
+  const updateActivePet = usePetStore((s) => s.updateActivePet);
+  const tokens = useProgressStore((s) => s.tokens);
+  const spendTokens = useProgressStore((s) => s.spendTokens);
   const today = useStepStore((s) => s.today);
   const { isAvailable } = useStepCounter();
   const dailyGoal = useSettingsStore((s) => s.dailyGoal);
@@ -43,36 +51,64 @@ export function HomeScreen() {
   const addTokens = useProgressStore((s) => s.addTokens);
 
   const steps = today?.stepCount ?? 0;
-  const goal = today?.goal ?? dailyGoal;
+  const goal = dailyGoal;
   const goalReached = steps >= goal;
   const stepsToGo = Math.max(goal - steps, 0);
+  const progress = Math.min(steps / goal, 1);
 
   const moodLabel = activePet ? t.mood[activePet.mood] : t.mood.normal;
+
+  const handleSwitchSpecies = useCallback(async (species: PetSpecies) => {
+    if (!activePet || activePet.species === species) return;
+    try { await updateActivePet({ species }); } catch { /* non-fatal */ }
+  }, [activePet, updateActivePet]);
+
+  const handleRename = useCallback(async (newName: string) => {
+    setRenameVisible(false);
+    try {
+      if (!isFreeRename) {
+        await spendTokens(GAME_CONFIG.petRenameCost);
+      }
+      await updateActivePet({ name: newName });
+      const next = renameCount + 1;
+      setRenameCount(next);
+      await setProgress('pet_rename_count', next);
+    } catch {
+      // spendTokens throws if balance is too low — modal already guards this, so non-fatal.
+    }
+  }, [isFreeRename, spendTokens, updateActivePet, renameCount]);
 
   const [checkinVisible, setCheckinVisible] = useState(false);
   const [pendingStreak, setPendingStreak] = useState(0);
   const [pendingTokens, setPendingTokens] = useState(0);
 
-  // Check on mount whether today's check-in has already been claimed.
+  const [renameVisible, setRenameVisible] = useState(false);
+  const [renameCount, setRenameCount] = useState(0);
+  const isFreeRename = renameCount === 0;
+
   useEffect(() => {
-    async function checkCheckin() {
+    async function init() {
       try {
-        const lastDate = await getLastCheckinDate();
+        const [lastDate, savedRenameCount] = await Promise.all([
+          getLastCheckinDate(),
+          getProgress<number>('pet_rename_count'),
+        ]);
+        setRenameCount(savedRenameCount ?? 0);
+
         const todayStr = todayUtcString();
         if (lastDate !== todayStr) {
-          // Not yet checked in today — compute what will be shown.
           const newStreak = computeStreak(lastDate, streakCurrent);
           const isMilestone = isStreakMilestone(newStreak);
-          const tokens = isMilestone ? calcStreakBonus() : checkinTokenAmount();
+          const earned = isMilestone ? calcStreakBonus() : checkinTokenAmount();
           setPendingStreak(newStreak);
-          setPendingTokens(tokens);
+          setPendingTokens(earned);
           setCheckinVisible(true);
         }
       } catch {
         // If the DB isn't ready yet, skip silently.
       }
     }
-    checkCheckin();
+    init();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -93,51 +129,203 @@ export function HomeScreen() {
   }, [pendingStreak, pendingTokens, setStreakCurrent, addTokens]);
 
   return (
-    <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        <View style={styles.topRow}>
-          <Text style={styles.heading}>PawStep</Text>
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      {/* TopAppBar */}
+      <View style={styles.header}>
+        <View style={styles.headerLeft}>
           <TouchableOpacity
-            style={styles.shopButton}
+            style={styles.headerAvatarWrap}
+            onPress={() => navigation.navigate('Profile')}
+            accessibilityRole="button"
+            accessibilityLabel="View profile"
+          >
+            <View style={styles.headerAvatar}>
+              {activePet && PET_IMAGES[activePet.species] ? (
+                <Image
+                  source={PET_IMAGES[activePet.species]}
+                  style={styles.headerAvatarImage}
+                  resizeMode="contain"
+                  accessibilityIgnoresInvertColors
+                />
+              ) : (
+                <Text style={styles.headerAvatarEmoji}>🐾</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+          <Text style={styles.logoText}>PawStep</Text>
+        </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.headerIconButton}
             onPress={() => navigation.navigate('Shop')}
             accessibilityRole="button"
-            accessibilityLabel="Open Shop"
+            accessibilityLabel="Open shop"
           >
-            <Text style={styles.shopButtonText}>🛍</Text>
+            <Text style={styles.headerIconEmoji}>🛍</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.headerIconButton}
+            onPress={() => navigation.navigate('Profile')}
+            accessibilityRole="button"
+            accessibilityLabel="Settings"
+          >
+            <Text style={styles.headerIconEmoji}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+      <View style={styles.headerDivider} />
+
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Hero Section */}
+        <View style={styles.heroSection}>
+          <View style={styles.heroAvatarContainer}>
+            <View style={styles.heroAvatar}>
+              {activePet ? (
+                <PetAvatar
+                  species={activePet.species}
+                  name={activePet.name}
+                  mood={activePet.mood}
+                  size={240}
+                />
+              ) : (
+                <View style={styles.heroAvatarEmpty}>
+                  <Text style={{ fontSize: 80 }}>🐾</Text>
+                </View>
+              )}
+            </View>
+            <View style={styles.bestBuddyBadge}>
+              <Text style={styles.bestBuddyText}>Best Buddy!</Text>
+            </View>
+          </View>
+
+          {/* Name button */}
+          {activePet && (
+            <TouchableOpacity
+              style={styles.nameButton}
+              onPress={() => setRenameVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel={`Pet name: ${activePet.name}. Tap to rename.`}
+            >
+              <Text style={styles.nameButtonText}>{activePet.name}</Text>
+              <Text style={styles.nameButtonIcon}>✏️</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Pet picker */}
+          <View style={styles.pickerRow}>
+            {PET_SPECIES.map((sp) => {
+              const active = activePet?.species === sp;
+              return (
+                <TouchableOpacity
+                  key={sp}
+                  style={[styles.pickerCard, active && styles.pickerCardActive]}
+                  onPress={() => void handleSwitchSpecies(sp)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Choose ${SPECIES_LABEL[sp]}`}
+                  accessibilityState={{ selected: active }}
+                >
+                  <Image
+                    source={PET_IMAGES[sp]}
+                    style={styles.pickerImage}
+                    resizeMode="contain"
+                    accessibilityIgnoresInvertColors
+                  />
+                  <Text style={[styles.pickerLabel, active && styles.pickerLabelActive]}>
+                    {SPECIES_LABEL[sp]}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.heroTitle}>Ready to Play?</Text>
+          <Text style={styles.heroSubtitle}>
+            Time to stretch those paws and hit the trail with your best friend.
+          </Text>
+
+          <TouchableOpacity
+            style={styles.goButton}
+            onPress={() => navigation.navigate('Walks')}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Start walk"
+          >
+            <Text style={styles.goButtonIcon}>🐾</Text>
+            <Text style={styles.goButtonText}>Go!</Text>
           </TouchableOpacity>
         </View>
 
-        {activePet ? (
-          <View style={styles.petSection}>
-            <PetAvatar
-              species={activePet.species}
-              name={activePet.name}
-              mood={activePet.mood}
-              size={120}
-            />
-            <View style={styles.moodRow}>
-              <Text style={styles.moodLabel}>{t.home.moodLabel}: </Text>
-              <Text style={styles.moodValue}>{moodLabel}</Text>
+        {/* Bento Grid */}
+        <View style={styles.bentoGrid}>
+          {/* Steps Widget */}
+          <View style={styles.widgetCard}>
+            <View style={styles.widgetHeader}>
+              <View>
+                <Text style={styles.widgetLabel}>Daily Progress</Text>
+                <Text style={styles.widgetTitleSteps}>Steps</Text>
+              </View>
+              <View style={[styles.widgetIconBadge, { backgroundColor: colors.tertiaryContainer }]}>
+                <Text style={styles.widgetIconEmoji}>🏃</Text>
+              </View>
+            </View>
+            <View style={styles.stepsRow}>
+              <Text style={styles.stepsCount}>{steps.toLocaleString()}</Text>
+              <Text style={styles.stepsGoal}>/ {goal.toLocaleString()}</Text>
+            </View>
+            <View style={styles.progressBarTrack}>
+              <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
             </View>
           </View>
-        ) : (
-          <View style={styles.petSection}>
-            <View style={styles.petPlaceholder}>
-              <Text style={styles.petPlaceholderText}>🐾</Text>
+
+          {/* Pet Mood Widget */}
+          <View style={styles.widgetCard}>
+            <View style={styles.widgetHeader}>
+              <View>
+                <Text style={styles.widgetLabel}>Status Check</Text>
+                <Text style={styles.widgetTitleMood}>Pet Mood</Text>
+              </View>
+              <View style={[styles.widgetIconBadge, { backgroundColor: colors.secondaryContainer, transform: [{ rotate: '-12deg' }] }]}>
+                <Text style={styles.widgetIconEmoji}>❤️</Text>
+              </View>
+            </View>
+            <View style={styles.moodStatusContainer}>
+              <View style={styles.moodEmojiCircle}>
+                {activePet && PET_IMAGES[activePet.species] ? (
+                  <Image
+                    source={PET_IMAGES[activePet.species]}
+                    style={{ width: 44, height: 44 }}
+                    resizeMode="contain"
+                    accessibilityIgnoresInvertColors
+                  />
+                ) : (
+                  <Text style={styles.moodEmojiText}>🐾</Text>
+                )}
+              </View>
+              <View style={styles.moodTextBlock}>
+                <Text style={styles.moodStatusLabel}>{moodLabel}</Text>
+                <Text style={styles.moodStatusDescription} numberOfLines={2}>
+                  {activePet?.name ?? 'Your pet'} is feeling {activePet?.mood ?? 'normal'} today!
+                </Text>
+              </View>
             </View>
           </View>
-        )}
 
-        <View style={styles.ringSection}>
-          <StepRing steps={steps} goal={goal} size={220} strokeWidth={16} />
-        </View>
-
-        <View style={styles.countdownCard}>
-          {goalReached ? (
-            <Text style={styles.goalReached}>{t.home.goalReached}</Text>
-          ) : (
-            <Text style={styles.stepsToGo}>{t.home.stepsToGo(stepsToGo)}</Text>
-          )}
+          {/* Today's Goal Widget */}
+          <View style={[styles.widgetCard, styles.goalWidgetCard]}>
+            <Text style={styles.goalWidgetTitle}>Today's Goal</Text>
+            <Text style={styles.goalWidgetBody}>
+              {goalReached
+                ? `${activePet?.name ?? 'Your pet'} is so proud — daily goal reached!`
+                : `${stepsToGo.toLocaleString()} more steps to keep ${activePet?.name ?? 'your pet'} happy and healthy!`}
+            </Text>
+            <TouchableOpacity
+              style={styles.goalWidgetButton}
+              onPress={() => navigation.navigate('Goals')}
+              accessibilityRole="button"
+            >
+              <Text style={styles.goalWidgetButtonText}>View Goals</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {!isAvailable && (
@@ -146,6 +334,15 @@ export function HomeScreen() {
           </View>
         )}
       </ScrollView>
+
+      <RenameModal
+        visible={renameVisible}
+        currentName={activePet?.name ?? ''}
+        isFree={isFreeRename}
+        tokenBalance={tokens}
+        onConfirm={handleRename}
+        onCancel={() => setRenameVisible(false)}
+      />
 
       <DailyCheckinModal
         visible={checkinVisible}
@@ -157,96 +354,382 @@ export function HomeScreen() {
   );
 }
 
+const STICKER_SHADOW = {
+  shadowColor: colors.onBackground,
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.08,
+  shadowRadius: 12,
+};
+
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
   },
-  scroll: {
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.xxl,
-  },
-  topRow: {
+
+  // ── TopAppBar ──────────────────────────────────────────────────────────────
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: '100%',
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
   },
-  heading: {
-    ...typography.heading1,
-    color: colors.primary,
-  },
-  shopButton: {
-    padding: spacing.sm,
-  },
-  shopButtonText: {
-    fontSize: 24,
-  },
-  petSection: {
+  headerLeft: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
   },
-  petPlaceholder: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.surfaceAlt,
-    borderWidth: 3,
-    borderColor: colors.primary,
+  headerAvatarWrap: {
+    ...STICKER_SHADOW,
+    elevation: 2,
+  },
+  headerAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.secondaryContainer,
+    borderWidth: 2,
+    borderColor: colors.outlineVariant + '66',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  headerAvatarImage: {
+    width: 32,
+    height: 32,
+  },
+  headerAvatarEmoji: {
+    fontSize: 20,
+  },
+  logoText: {
+    fontSize: 24,
+    fontWeight: '900',
+    fontStyle: 'italic',
+    color: colors.primary,
+    letterSpacing: -0.5,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  headerIconButton: {
+    padding: spacing.xs,
+  },
+  headerIconEmoji: {
+    fontSize: 26,
+  },
+  headerDivider: {
+    height: 4,
+    backgroundColor: colors.surfaceContainer,
+  },
+
+  // ── Scroll ─────────────────────────────────────────────────────────────────
+  scroll: {
+    paddingBottom: spacing.xxl,
+  },
+
+  // ── Hero Section ───────────────────────────────────────────────────────────
+  heroSection: {
+    alignItems: 'center',
+    paddingTop: spacing.xl,
+    paddingBottom: spacing.xxl,
+    paddingHorizontal: spacing.lg,
+  },
+  heroAvatarContainer: {
+    position: 'relative',
+    marginBottom: spacing.xl,
+  },
+  heroAvatar: {
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '3deg' }],
+    ...STICKER_SHADOW,
+    elevation: 8,
+  },
+  heroAvatarEmpty: {
+    width: 240,
+    height: 240,
+    borderRadius: 120,
+    backgroundColor: colors.surfaceContainerLow,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  petPlaceholderText: {
-    fontSize: 48,
+  bestBuddyBadge: {
+    position: 'absolute',
+    bottom: -10,
+    right: -5,
+    backgroundColor: colors.secondaryContainer,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    transform: [{ rotate: '-6deg' }],
+    ...STICKER_SHADOW,
+    elevation: 4,
   },
-  moodRow: {
+  bestBuddyText: {
+    ...typography.labelSmall,
+    color: colors.onSecondaryContainer,
+  },
+  nameButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: spacing.sm,
+    gap: spacing.sm,
+    backgroundColor: colors.surfaceContainerLowest,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: 20,
+    borderWidth: 2,
+    borderColor: colors.outlineVariant,
+    marginBottom: spacing.lg,
+    ...STICKER_SHADOW,
+    elevation: 2,
   },
-  moodLabel: {
-    ...typography.label,
-    color: colors.textSecondary,
+  nameButtonText: {
+    ...typography.heading3,
+    color: colors.onBackground,
+    fontWeight: '800',
   },
-  moodValue: {
-    ...typography.label,
-    color: colors.textPrimary,
-    fontWeight: '600',
+  nameButtonIcon: {
+    fontSize: 16,
   },
-  ringSection: {
-    marginVertical: spacing.lg,
+  pickerRow: {
+    flexDirection: 'row',
+    gap: spacing.md,
+    justifyContent: 'center',
+    marginBottom: spacing.xl,
   },
-  countdownCard: {
-    backgroundColor: colors.surface,
-    borderRadius: 12,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.xl,
-    borderWidth: 1,
-    borderColor: colors.border,
+  pickerCard: {
     alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.outlineVariant,
+    backgroundColor: colors.surfaceContainerLowest,
+    minWidth: 84,
+    ...STICKER_SHADOW,
+    elevation: 2,
   },
-  stepsToGo: {
+  pickerCardActive: {
+    borderColor: colors.primary,
+    borderWidth: 3,
+    backgroundColor: colors.primaryContainer,
+  },
+  pickerImage: {
+    width: 60,
+    height: 60,
+  },
+  pickerLabel: {
+    ...typography.labelSmall,
+    color: colors.onSurfaceVariant,
+    marginTop: spacing.xs,
+  },
+  pickerLabelActive: {
+    color: colors.onPrimaryContainer,
+    fontWeight: '800',
+  },
+  heroTitle: {
+    fontSize: 48,
+    fontWeight: '900',
+    lineHeight: 56,
+    color: colors.primary,
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+  },
+  heroSubtitle: {
+    ...typography.body,
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+    maxWidth: 300,
+    marginBottom: spacing.xl,
+  },
+  goButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.primaryContainer,
+    paddingHorizontal: spacing.xxl,
+    paddingVertical: spacing.lg,
+    borderRadius: 16,
+    borderBottomWidth: 4,
+    borderBottomColor: colors.primaryDim,
+    gap: spacing.md,
+    ...STICKER_SHADOW,
+    elevation: 4,
+  },
+  goButtonIcon: {
+    fontSize: 32,
+  },
+  goButtonText: {
+    ...typography.heading2,
+    color: colors.onPrimaryContainer,
+    fontWeight: '900',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+
+  // ── Bento Grid ─────────────────────────────────────────────────────────────
+  bentoGrid: {
+    paddingHorizontal: spacing.lg,
+    gap: spacing.lg,
+  },
+  widgetCard: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: 16,
+    padding: spacing.xl,
+    borderWidth: 2,
+    borderColor: colors.outlineVariant + '4D',
+    ...STICKER_SHADOW,
+    elevation: 2,
+  },
+  widgetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: spacing.lg,
+  },
+  widgetLabel: {
+    ...typography.labelSmall,
+    color: colors.onSurfaceVariant,
+    marginBottom: 4,
+  },
+  widgetTitleSteps: {
+    ...typography.heading2,
+    color: colors.primary,
+    fontWeight: '900',
+  },
+  widgetTitleMood: {
+    ...typography.heading2,
+    color: colors.secondary,
+    fontWeight: '900',
+  },
+  widgetIconBadge: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    transform: [{ rotate: '12deg' }],
+    ...STICKER_SHADOW,
+    elevation: 2,
+  },
+  widgetIconEmoji: {
+    fontSize: 28,
+  },
+  stepsRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  stepsCount: {
+    fontSize: 60,
+    fontWeight: '900',
+    color: colors.onBackground,
+    lineHeight: 68,
+  },
+  stepsGoal: {
+    ...typography.bodyBold,
+    color: colors.onSurfaceVariant,
+  },
+  progressBarTrack: {
+    width: '100%',
+    height: 24,
+    backgroundColor: colors.surfaceContainer,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 2,
+    borderColor: colors.surfaceDim,
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.tertiary,
+    borderRadius: 12,
+  },
+  moodStatusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceContainer + '80',
+    padding: spacing.md,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: colors.outlineVariant + '66',
+    borderStyle: 'dashed',
+    gap: spacing.md,
+  },
+  moodEmojiCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  moodEmojiText: {
+    fontSize: 32,
+  },
+  moodTextBlock: {
+    flex: 1,
+  },
+  moodStatusLabel: {
     ...typography.heading3,
-    color: colors.textPrimary,
+    color: colors.onBackground,
+    fontWeight: '800',
   },
-  goalReached: {
+  moodStatusDescription: {
+    ...typography.caption,
+    color: colors.onSurfaceVariant,
+  },
+  goalWidgetCard: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primaryFixed + '4D',
+    borderWidth: 4,
+  },
+  goalWidgetTitle: {
     ...typography.heading3,
-    color: colors.success,
+    color: colors.onPrimary,
+    fontWeight: '900',
+    marginBottom: spacing.xs,
   },
+  goalWidgetBody: {
+    ...typography.body,
+    color: colors.onPrimary + 'CC',
+    marginBottom: spacing.lg,
+  },
+  goalWidgetButton: {
+    backgroundColor: colors.primaryContainer,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.md,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  goalWidgetButtonText: {
+    ...typography.label,
+    color: colors.onPrimaryContainer,
+  },
+
+  // ── Warning ────────────────────────────────────────────────────────────────
   warningBanner: {
-    marginTop: spacing.md,
-    backgroundColor: colors.surfaceAlt,
+    margin: spacing.lg,
+    backgroundColor: colors.surfaceContainerLow,
     borderRadius: 8,
     padding: spacing.sm,
     borderWidth: 1,
-    borderColor: colors.warning,
+    borderColor: colors.error,
   },
   warningText: {
     ...typography.caption,
-    color: colors.textSecondary,
+    color: colors.onSurfaceVariant,
     textAlign: 'center',
   },
 });

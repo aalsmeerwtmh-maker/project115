@@ -219,6 +219,20 @@ Tests live in `__tests__/` at the project root. The Jest config in `jest.config.
 
 ---
 
+## Troubleshooting: Connection & Firewall
+
+If your phone cannot reach the Metro bundler or you cannot install the development build via ADB:
+
+1. **Check Tailscale:** Run `tailscale status`. Ensure both your PC and Phone are listed and "online".
+2. **Firewall:** Run the following command in an **Administrator** PowerShell:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File scripts/fix-firewall.ps1
+   ```
+3. **Network Profile:** Ensure your connection (Ethernet/WiFi) is set to **Private** in Windows Settings if you are on a trusted network.
+4. **Metro IP:** Verify `.env.local` contains `REACT_NATIVE_PACKAGER_HOSTNAME=<your-tailscale-ip>`.
+
+---
+
 ## Performance baselines
 
 Measured on a mid-tier 2022 Android device (Snapdragon 778G, 6 GB RAM) using a production-profile build.

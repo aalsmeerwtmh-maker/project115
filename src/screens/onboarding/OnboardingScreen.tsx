@@ -29,19 +29,19 @@ import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 
-type Species = 'dog' | 'cat' | 'fox';
+type Species = 'dog' | 'cat' | 'bird';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const TOTAL_PAGES = 5;
 
 type OnboardingNav = NativeStackNavigationProp<RootStackParamList>;
 
-const SPECIES_OPTIONS: Species[] = ['dog', 'cat', 'fox'];
+const SPECIES_OPTIONS: Species[] = ['dog', 'cat', 'bird'];
 
 function getSpeciesName(species: Species): string {
   if (species === 'dog') return t.onboarding.dogName;
   if (species === 'cat') return t.onboarding.catName;
-  return t.onboarding.foxName;
+  return t.onboarding.birdName;
 }
 
 export function OnboardingScreen() {

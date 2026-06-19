@@ -31,7 +31,7 @@ export function PrimaryButton({
       accessibilityState={{ disabled: isDisabled }}
     >
       {loading ? (
-        <ActivityIndicator color={colors.surface} />
+        <ActivityIndicator color={colors.onPrimary} />
       ) : (
         <Text style={styles.label} allowFontScaling>
           {label}
@@ -49,13 +49,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
+    // shadow
+    shadowColor: colors.onBackground,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   disabled: {
-    backgroundColor: colors.primaryLight,
+    backgroundColor: colors.primaryDim,
     opacity: 0.6,
   },
   label: {
-    ...typography.bodyBold,
-    color: colors.surface,
+    ...typography.label,
+    color: colors.onPrimary,
+    fontWeight: '700',
   },
 });
+

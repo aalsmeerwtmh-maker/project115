@@ -67,6 +67,14 @@ export interface GameConfig {
   tokenEarnRates: TokenEarnRates;
   walkEvents: WalkEvents;
   ar: ARConfig;
+  /** Step count thresholds that control the home-screen pet animation tier. */
+  petAnimationStepThresholds: {
+    excited: number; // steps ≥ this → excited wiggle
+    happy: number;   // steps ≥ this → happy bounce
+    normal: number;  // steps ≥ this → gentle float; below → sad droop
+  };
+  /** Token cost to rename a pet after the first (free) rename. */
+  petRenameCost: number;
 }
 
 export const GAME_CONFIG: GameConfig = {
@@ -258,6 +266,14 @@ export const GAME_CONFIG: GameConfig = {
     minDepthConfidence: 0.3,
     placingFeedbackMs: 700,
   },
+
+  petAnimationStepThresholds: {
+    excited: 7000,
+    happy: 3000,
+    normal: 1,
+  },
+
+  petRenameCost: 5,
 
   walkEvents: {
     intervalMinutes: 10,

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet, type ImageSourcePropType } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,17 +19,17 @@ interface PetAvatarProps {
   size?: number;
 }
 
-const SPECIES_EMOJI: Record<string, string> = {
-  dog: '🐶',
-  cat: '🐱',
-  fox: '🦊',
+// Exported so HomeScreen and OnboardingScreen can reuse the same sources.
+export const PET_IMAGES: Record<string, ImageSourcePropType> = {
+  dog: require('../../assets/pet_dog.png'),
+  cat: require('../../assets/pet_cat.png'),
+  bird: require('../../assets/pet_bird.png'),
 };
 
 export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAvatarProps) {
-  const emoji = SPECIES_EMOJI[species] ?? '🐾';
-  const emojiSize = size * 0.5;
+  const imageSource = PET_IMAGES[species];
+  const imageSize = size * 0.85;
 
-  // Shared animation values.
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
   const rotateZ = useSharedValue(0);
@@ -43,7 +43,6 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
   }));
 
   useEffect(() => {
-    // Cancel any running animations before starting a new one.
     cancelAnimation(translateY);
     cancelAnimation(scale);
     cancelAnimation(rotateZ);
@@ -57,7 +56,6 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
 
     switch (mood) {
       case 'normal':
-        // Gentle vertical float ±4 dp over 2 s, loops forever.
         translateY.value = withRepeat(
           withTiming(-4, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
           -1,
@@ -66,7 +64,6 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
         break;
 
       case 'happy':
-        // Scale 1 → 1.12 → 1 over 0.4 s, repeat 3×, then idle.
         scale.value = withSequence(
           withRepeat(
             withSequence(
@@ -76,7 +73,6 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
             3,
             false,
           ),
-          // After 3 bounces, settle into a gentle float.
           withRepeat(
             withTiming(1.04, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
             -1,
@@ -86,7 +82,6 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
         break;
 
       case 'excited':
-        // rotateZ ±5° over 0.15 s, repeat 6×, then idle.
         rotateZ.value = withSequence(
           withRepeat(
             withSequence(
@@ -101,7 +96,6 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
         break;
 
       case 'sad':
-        // Slow translateY +6 dp over 1.5 s, hold, back, repeat.
         translateY.value = withRepeat(
           withSequence(
             withTiming(6, { duration: 1500, easing: Easing.out(Easing.ease) }),
@@ -126,9 +120,16 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
       accessibilityLabel={`${name} the ${species}, feeling ${mood}`}
     >
       <Animated.View style={animatedStyle}>
-        <Text style={[styles.emoji, { fontSize: emojiSize }]} allowFontScaling>
-          {emoji}
-        </Text>
+        {imageSource ? (
+          <Image
+            source={imageSource}
+            style={{ width: imageSize, height: imageSize }}
+            resizeMode="contain"
+            accessibilityIgnoresInvertColors
+          />
+        ) : (
+          <Text style={{ fontSize: imageSize * 0.55 }}>🐾</Text>
+        )}
       </Animated.View>
       <Text style={styles.name} numberOfLines={1} allowFontScaling>
         {name}
@@ -145,9 +146,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     overflow: 'hidden',
-  },
-  emoji: {
-    lineHeight: undefined,
   },
   name: {
     ...typography.captionBold,

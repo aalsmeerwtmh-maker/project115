@@ -60,7 +60,7 @@ export const en = {
   species: {
     dog: 'Dog',
     cat: 'Cat',
-    fox: 'Fox',
+    bird: 'Bird',
   },
 
   // Walks screen
@@ -157,7 +157,7 @@ export const en = {
     finish: "Let's go!",
     dogName: 'Dog',
     catName: 'Cat',
-    foxName: 'Fox',
+    birdName: 'Bird',
   },
 
   // Daily check-in
@@ -166,6 +166,18 @@ export const en = {
     streakDay: (n: number) => `Day ${n}`,
     rewardEarned: (n: number) => `+${n} tokens`,
     claimButton: 'Claim Reward',
+  },
+
+  // Pet rename
+  rename: {
+    title: 'Name Your Pet',
+    placeholder: 'Enter a name…',
+    costLabel: 'Cost',
+    costFree: 'Free!',
+    costTokens: (n: number) => `${n} tokens`,
+    insufficientTokens: 'Not enough tokens',
+    save: 'Save',
+    cancel: 'Cancel',
   },
 
   // Common / shared

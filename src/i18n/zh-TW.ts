@@ -60,7 +60,7 @@ export const zhTW = {
   species: {
     dog: '狗',
     cat: '貓',
-    fox: '狐狸',
+    bird: '鳥',
   },
 
   // Walks screen
@@ -156,7 +156,7 @@ export const zhTW = {
     finish: '出發！',
     dogName: '狗',
     catName: '貓',
-    foxName: '狐狸',
+    birdName: '鳥',
   },
 
   // Daily check-in
@@ -165,6 +165,18 @@ export const zhTW = {
     streakDay: (n: number) => `第 ${n} 天`,
     rewardEarned: (n: number) => `+${n} 代幣`,
     claimButton: '領取獎勵',
+  },
+
+  // Pet rename
+  rename: {
+    title: '命名你的寵物',
+    placeholder: '輸入名字…',
+    costLabel: '費用',
+    costFree: '免費！',
+    costTokens: (n: number) => `${n} 代幣`,
+    insufficientTokens: '代幣不足',
+    save: '儲存',
+    cancel: '取消',
   },
 
   // Common / shared

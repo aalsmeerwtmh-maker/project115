@@ -19,11 +19,79 @@ interface PetAvatarProps {
   size?: number;
 }
 
-// Exported so HomeScreen and OnboardingScreen can reuse the same sources.
+// Default (standing) image per species — used by PetAvatar, species picker,
+// header thumbnail, onboarding, and profile.
 export const PET_IMAGES: Record<string, ImageSourcePropType> = {
-  dog: require('../../assets/pet_dog.png'),
-  cat: require('../../assets/pet_cat.png'),
-  bird: require('../../assets/pet_bird.png'),
+  dog:  require('../../assets/pet_dog_stand.png'),
+  cat:  require('../../assets/pet_cat_stand.png'),
+  bird: require('../../assets/pet_bird_stand.png'),
+};
+
+// Mood-specific image registry.
+// walk / excited are 3-slot tuples for frame-cycling in PetStateDisplay.
+// Dog walk_3 repeats walk_1 (only 2 walk frames available).
+// Bird fly_3 repeats fly_1; bird jump_3 repeats jump_1.
+// Bird has no sleeping image — falls back to stand.
+// Dog has no specific happy image — falls back to stand.
+export const PET_STATE_IMAGES: Record<
+  string,
+  {
+    stand:    ImageSourcePropType;
+    eating:   ImageSourcePropType;
+    sleeping: ImageSourcePropType;
+    walk:     readonly [ImageSourcePropType, ImageSourcePropType, ImageSourcePropType];
+    excited:  readonly [ImageSourcePropType, ImageSourcePropType, ImageSourcePropType];
+    happy:    ImageSourcePropType;
+  }
+> = {
+  dog: {
+    stand:    require('../../assets/pet_dog_stand.png'),
+    eating:   require('../../assets/pet_dog_eating.png'),
+    sleeping: require('../../assets/pet_dog_sleeping.png'),
+    walk: [
+      require('../../assets/pet_dog_walk_1.png'),
+      require('../../assets/pet_dog_walk_2.png'),
+      require('../../assets/pet_dog_walk_1.png'), // no walk_3 — mirror walk_1
+    ],
+    excited: [
+      require('../../assets/pet_dog_run_1.png'),
+      require('../../assets/pet_dog_run_2.png'),
+      require('../../assets/pet_dog_run_3.png'),
+    ],
+    happy: require('../../assets/pet_dog_stand.png'), // no dedicated happy pose
+  },
+  cat: {
+    stand:    require('../../assets/pet_cat_stand.png'),
+    eating:   require('../../assets/pet_cat_eating.png'),
+    sleeping: require('../../assets/pet_cat_sleeping.png'),
+    walk: [
+      require('../../assets/pet_cat_walk_1.png'),
+      require('../../assets/pet_cat_walk_2.png'),
+      require('../../assets/pet_cat_walk_3.png'),
+    ],
+    excited: [
+      require('../../assets/pet_cat_excited.png'),
+      require('../../assets/pet_cat_excited.png'),
+      require('../../assets/pet_cat_excited.png'),
+    ],
+    happy: require('../../assets/pet_cat_happy.png'), // licking paw
+  },
+  bird: {
+    stand:    require('../../assets/pet_bird_stand.png'),
+    eating:   require('../../assets/pet_bird_eating.png'), // pecking seeds
+    sleeping: require('../../assets/pet_bird_sleeping.png'),
+    walk: [
+      require('../../assets/pet_bird_fly_1.png'), // wings down
+      require('../../assets/pet_bird_fly_2.png'), // wings up
+      require('../../assets/pet_bird_fly_1.png'), // cycle back
+    ],
+    excited: [
+      require('../../assets/pet_bird_jump_1.png'),
+      require('../../assets/pet_bird_jump_2.png'),
+      require('../../assets/pet_bird_jump_1.png'),
+    ],
+    happy: require('../../assets/pet_bird_jump_1.png'), // wings spread = happy
+  },
 };
 
 export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAvatarProps) {

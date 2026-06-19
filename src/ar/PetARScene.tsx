@@ -1,99 +1,128 @@
 /**
- * PetARScene — Viro AR scene that places the user's pet on a detected surface.
+ * PetARScene — Viro AR scene that places the user's 3-D pet on a detected surface.
  *
- * PLACEHOLDER MODEL NOTE:
- * assets/ar/pet.glb does not exist yet and must NOT be generated or sourced externally —
- * all art is human-authored by the team. Until the file is delivered, a ViroSphere
- * is rendered as a stand-in. Replace the ViroSphere block with Viro3DObject once the
- * file is delivered (see comment near the ViroSphere below).
- *
- * Placement flow:
- * 1. Scene opens → status: 'scanning'
- * 2. onTrackingUpdated fires TRACKING_LIMITED or TRACKING_NORMAL → status: 'ready';
- *    ARWalkScreen shows "Tap to place your pet" and mounts the tap overlay.
- * 3. onCameraARHitTest fires every frame with hit-test results from the camera centre.
- *    The best result (filtered by type priority, camera distance, and depth confidence)
- *    is cached in latestHitRef.
- * 4. User taps → ARWalkScreen calls the registered tap handler.
- *    Handler reads latestHitRef, places the pet → calls onPlacementStateChanged('placing').
- *    ARWalkScreen shows a "Placing…" banner for placingFeedbackMs, then transitions to 'placed'.
- * 5. ViroNode renders the pet at that fixed world position — no drift.
- *
- * Distance filtering (why camera-relative, not origin-relative):
- * transform.position from onCameraARHitTest is in world space anchored to the AR
- * session origin. After the user walks a few metres the session origin is behind them —
- * sqrt(x²+y²+z²) gives distance from start, not from the camera. cameraOrientation.position
- * in the same event is the camera's current world position and is the correct reference point.
- *
- * Why ExistingPlaneUsingExtent before ExistingPlane:
- * ExistingPlane intersects the plane's infinite mathematical extension; a near-horizontal
- * ray can hit a confirmed floor plane metres away. ExistingPlaneUsingExtent only fires
- * when the intersection is inside the plane's measured polygon — much tighter.
- *
- * Why onCameraARHitTest instead of performARHitTestWithPoint:
- * performARHitTestWithPoint(x, y) consistently returns 0 results regardless of
- * coordinate system — it appears to be unreliable in this version of react-viro.
- * onCameraARHitTest is Viro's own continuous native pipeline and reliably produces
- * hit results when the camera is pointed at a real-world surface.
- *
- * Why named prop instead of arguments[0]:
- * Babel's arrow-function transform hoists `arguments` to the nearest non-arrow scope.
- * In a strict-mode module that scope has no `arguments` object — every access returns
- * undefined. Receiving sceneNavigator as a real named prop is safe in all environments.
+ * Behaviour:
+ *  - Scans for a horizontal plane, then waits for a tap (via registerTapHandler).
+ *  - Once placed, renders the pet as a Viro3DObject using the correct GLB for the
+ *    active species + display mood (sleeping / eating / walking / excited / happy / normal).
+ *  - Multi-frame moods (walking, excited, happy) animate by cycling through GLB frames
+ *    with setInterval — same pattern as PetStateDisplay for 2-D screens.
+ *  - When the user walks more than petFollowDistanceM away from the pet, the pet switches
+ *    to its walking animation and steps toward the camera until within petArriveDistanceM.
+ *  - Species and mood are pushed from ARWalkScreen via registerSceneUpdate (avoids the
+ *    viroAppProps stale-closure problem — sceneNavigator is a class field set once).
  */
 import { useEffect, useRef, useState } from 'react';
 import {
   ViroARScene,
   ViroAmbientLight,
+  ViroDirectionalLight,
   ViroNode,
-  ViroSphere,
+  Viro3DObject,
   ViroTrackingStateConstants,
 } from '@reactvision/react-viro';
 import type { ViroCameraARHitTest, ViroARHitTestResult } from '@reactvision/react-viro';
 
-import { IDLE_ANIMATION_NAME, HIT_TEST_PRIORITY } from './arResources';
+import { PET_AR_MODELS, IDLE_ANIMATION_NAME, HIT_TEST_PRIORITY } from './arResources';
 import { GAME_CONFIG } from '@/game/config';
+import type { DisplayMood } from '@/game/petMood';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Src = any;
+type Vec3 = [number, number, number];
 type PlacementStatus = 'scanning' | 'ready' | 'placing' | 'placed';
-
-type PlacementState =
-  | { status: 'scanning' }
-  | { status: 'ready' }
-  | { status: 'placed'; position: [number, number, number] };
+type PlacementState = { status: 'scanning' } | { status: 'ready' } | { status: 'placed'; position: Vec3 };
 
 type ViroAppProps = {
   onPlacementStateChanged?: (status: PlacementStatus) => void;
   registerTapHandler?: (fn: () => void) => void;
+  registerSceneUpdate?: (fn: (species: string, mood: DisplayMood) => void) => void;
+  initialSpecies?: string;
+  initialMood?: DisplayMood;
 };
 
 type PetARSceneProps = {
-  sceneNavigator: {
-    viroAppProps?: ViroAppProps;
-  };
+  sceneNavigator: { viroAppProps?: ViroAppProps };
 };
 
 // ---------------------------------------------------------------------------
-// Distance filtering (module-level — computed once, not per render)
+// Frame-cycle intervals (ms) per mood
 // ---------------------------------------------------------------------------
 
-const HIT_MAX_DISTANCE: Record<string, number> = {
+const WALK_FRAME_MS    = 300;
+const EXCITED_FRAME_MS = 220;
+const HAPPY_FRAME_MS   = 600;
+
+// ---------------------------------------------------------------------------
+// Config shortcuts
+// ---------------------------------------------------------------------------
+
+const FOLLOW_DIST = GAME_CONFIG.ar.petFollowDistanceM;
+const ARRIVE_DIST = GAME_CONFIG.ar.petArriveDistanceM;
+const STEP_M      = GAME_CONFIG.ar.petWalkStepM;
+const STEP_MS     = GAME_CONFIG.ar.petWalkStepIntervalMs;
+
+const HIT_MAX: Record<string, number> = {
   ExistingPlaneUsingExtent: GAME_CONFIG.ar.hitTestMaxDistances.existingPlaneUsingExtent,
-  ExistingPlane: GAME_CONFIG.ar.hitTestMaxDistances.existingPlane,
+  ExistingPlane:            GAME_CONFIG.ar.hitTestMaxDistances.existingPlane,
   EstimatedHorizontalPlane: GAME_CONFIG.ar.hitTestMaxDistances.estimatedHorizontalPlane,
-  FeaturePoint: GAME_CONFIG.ar.hitTestMaxDistances.featurePoint,
+  FeaturePoint:             GAME_CONFIG.ar.hitTestMaxDistances.featurePoint,
 };
 
-function distanceFromCamera(
-  hit: ViroARHitTestResult,
-  camPos: [number, number, number],
-): number {
+// Animated moods (walking, excited, happy) use their own GLBs which tend to be
+// smaller than the stand pose — keep them at 0.5 so they look natural.
+// Static moods (stand, sleep, eat) are scaled down to match the apparent size
+// of the animated frames.
+const PET_SCALE_ANIMATED: Vec3 = [0.5, 0.5, 0.5];
+const PET_SCALE_STATIC:   Vec3 = [0.006, 0.006, 0.006];
+
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
+function camDist(hit: ViroARHitTestResult, cam: Vec3): number {
   const [hx, hy, hz] = hit.transform.position;
-  const [cx, cy, cz] = camPos;
-  return Math.sqrt((hx - cx) ** 2 + (hy - cy) ** 2 + (hz - cz) ** 2);
+  return Math.sqrt((hx - cam[0]) ** 2 + (hy - cam[1]) ** 2 + (hz - cam[2]) ** 2);
+}
+
+function xzDist(a: Vec3, b: Vec3): number {
+  return Math.sqrt((a[0] - b[0]) ** 2 + (a[2] - b[2]) ** 2);
+}
+
+function pickBest(results: ViroARHitTestResult[], cam: Vec3): ViroARHitTestResult | null {
+  for (const type of HIT_TEST_PRIORITY) {
+    const max = HIT_MAX[type] ?? 3.0;
+    for (const r of results) {
+      if (r.type !== type) continue;
+      if (camDist(r, cam) > max) continue;
+      if (r.hasDepthData && r.depthConfidence !== undefined && r.depthConfidence < GAME_CONFIG.ar.minDepthConfidence) continue;
+      return r;
+    }
+  }
+  return null;
+}
+
+/** Returns the ordered list of GLB sources for the given species + mood. */
+function getMoodFrames(species: string, mood: DisplayMood): Src[] {
+  const m = PET_AR_MODELS[species] ?? PET_AR_MODELS.dog;
+  switch (mood) {
+    case 'sleeping': return [m.sleeping];
+    case 'eating':   return [m.eating];
+    case 'walking':  return [...m.walk];
+    case 'excited':  return [...m.excited];
+    case 'happy':    return [...m.happy];
+    default:         return [m.stand]; // normal, sad
+  }
+}
+
+function frameCycleMs(mood: DisplayMood): number {
+  if (mood === 'excited') return EXCITED_FRAME_MS;
+  if (mood === 'happy')   return HAPPY_FRAME_MS;
+  return WALK_FRAME_MS;
 }
 
 // ---------------------------------------------------------------------------
@@ -102,43 +131,101 @@ function distanceFromCamera(
 
 export function PetARScene({ sceneNavigator }: PetARSceneProps) {
   const arSceneRef = useRef<ViroARScene>(null);
-  const [placement, setPlacement] = useState<PlacementState>({ status: 'scanning' });
 
-  // Always-current placement state for use inside closures.
+  // ---------- Placement state ----------
+  const [placement, setPlacement] = useState<PlacementState>({ status: 'scanning' });
   const placementRef = useRef(placement);
   placementRef.current = placement;
 
-  // Cache the best hit-test result from onCameraARHitTest so the tap handler
-  // can use it synchronously without calling performARHitTestWithPoint.
   const latestHitRef = useRef<ViroARHitTestResult | null>(null);
+  const cameraRef    = useRef<Vec3>([0, 0, 0]);
 
-  // ---------------------------------------------------------------------------
-  // Helpers
-  // ---------------------------------------------------------------------------
+  // ---------- Species / mood (pushed from ARWalkScreen via callback) ----------
+  const { initialSpecies = 'dog', initialMood = 'normal' } = sceneNavigator.viroAppProps ?? {};
+  const [species,  setSpecies]  = useState(initialSpecies);
+  const [baseMood, setBaseMood] = useState<DisplayMood>(initialMood);
 
-  function pickBestResult(
-    results: ViroARHitTestResult[],
-    camPos: [number, number, number],
-  ): ViroARHitTestResult | null {
-    for (const priorityType of HIT_TEST_PRIORITY) {
-      const maxDist = HIT_MAX_DISTANCE[priorityType] ?? 3.0;
-      for (const r of results) {
-        if (r.type !== priorityType) continue;
-        if (distanceFromCamera(r, camPos) > maxDist) continue;
-        if (
-          r.hasDepthData &&
-          r.depthConfidence !== undefined &&
-          r.depthConfidence < GAME_CONFIG.ar.minDepthConfidence
-        ) continue;
-        return r;
+  // Register callback so ARWalkScreen can push updates into this scene.
+  useEffect(() => {
+    sceneNavigator.viroAppProps?.registerSceneUpdate?.((sp, mood) => {
+      setSpecies(sp);
+      setBaseMood(mood);
+    });
+  // sceneNavigator is a stable Viro class ref — safe to omit.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---------- Follow logic ----------
+  const [isFollowing, setIsFollowing] = useState(false);
+  const isFollowingRef = useRef(false);
+
+  // The mood shown in the AR scene: override to 'walking' while following.
+  const arMood: DisplayMood = isFollowing ? 'walking' : baseMood;
+
+  // Pet world position (starts at placed position, updates while following).
+  const petPosRef = useRef<Vec3>([0, 0, 0]);
+  const [petPos, setPetPos]       = useState<Vec3>([0, 0, 0]);
+  const [petYRot, setPetYRot]     = useState(0);
+
+  // Step the pet toward the camera while isFollowing is true.
+  useEffect(() => {
+    if (!isFollowing) return;
+    const id = setInterval(() => {
+      const pet = petPosRef.current;
+      const cam = cameraRef.current;
+      const dx = cam[0] - pet[0];
+      const dz = cam[2] - pet[2];
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < ARRIVE_DIST) {
+        isFollowingRef.current = false;
+        setIsFollowing(false);
+        return;
+      }
+      const step = Math.min(STEP_M, dist - ARRIVE_DIST);
+      const newPos: Vec3 = [pet[0] + (dx / dist) * step, pet[1], pet[2] + (dz / dist) * step];
+      petPosRef.current = newPos;
+      setPetPos(newPos);
+      // Rotate pet to face the user (Y-axis rotation in degrees).
+      setPetYRot(Math.atan2(dx, dz) * (180 / Math.PI));
+    }, STEP_MS);
+    return () => clearInterval(id);
+  }, [isFollowing]);
+
+  // ---------- Frame animation ----------
+  const [arFrame, setArFrame] = useState(0);
+
+  useEffect(() => {
+    setArFrame(0);
+    const frames = getMoodFrames(species, arMood);
+    if (frames.length <= 1) return;
+    const id = setInterval(
+      () => setArFrame(f => (f + 1) % frames.length),
+      frameCycleMs(arMood),
+    );
+    return () => clearInterval(id);
+  }, [arMood, species]);
+
+  // ---------- Camera hit-test (always active) ----------
+
+  function handleCameraHitTest(event: ViroCameraARHitTest) {
+    const cam = event.cameraOrientation.position as Vec3;
+    cameraRef.current = cam;
+
+    if (placementRef.current.status !== 'placed') {
+      // Pre-placement: cache best surface hit for the tap handler.
+      const best = pickBest(event.hitTestResults, cam);
+      if (best) latestHitRef.current = best;
+    } else {
+      // Post-placement: start following if the user has walked too far.
+      const dist = xzDist(petPosRef.current, cam);
+      if (dist > FOLLOW_DIST && !isFollowingRef.current) {
+        isFollowingRef.current = true;
+        setIsFollowing(true);
       }
     }
-    return null;
   }
 
-  // ---------------------------------------------------------------------------
-  // Tracking
-  // ---------------------------------------------------------------------------
+  // ---------- Tracking ----------
 
   function handleTrackingUpdated(state: number) {
     if (
@@ -150,88 +237,56 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
     }
   }
 
-  // ---------------------------------------------------------------------------
-  // Continuous camera hit-test (disabled after placement)
-  // ---------------------------------------------------------------------------
-
-  function handleCameraHitTest(event: ViroCameraARHitTest) {
-    const camPos = event.cameraOrientation.position as [number, number, number];
-    const results = event.hitTestResults;
-    if (__DEV__ && results.length > 0) {
-      const summary = results.map(r => {
-        const d = distanceFromCamera(r, camPos);
-        return `${r.type}@${d.toFixed(2)}m conf=${r.depthConfidence ?? 'n/a'}`;
-      }).join(' | ');
-      console.log(`[PetARScene] cam=${JSON.stringify(camPos)} hits: ${summary}`);
-    }
-    const best = pickBestResult(results, camPos);
-    if (best) {
-      latestHitRef.current = best;
-      if (__DEV__) {
-        console.log(`[PetARScene] ref SET: ${best.type}@${distanceFromCamera(best, camPos).toFixed(2)}m`);
-      }
-    } else if (__DEV__ && results.length > 0) {
-      console.log('[PetARScene] ref NOT set (all results filtered)');
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // Tap handler registration (runs once on mount)
-  // ---------------------------------------------------------------------------
+  // ---------- Tap handler (registered once on mount) ----------
 
   useEffect(() => {
-    const { registerTapHandler } = sceneNavigator.viroAppProps ?? {};
-    registerTapHandler?.(() => {
-      if (__DEV__) {
-        console.log(`[PetARScene:tap] status=${placementRef.current.status} hit=${latestHitRef.current ? latestHitRef.current.type + '@' + distanceFromCamera(latestHitRef.current, [0,0,0]).toFixed(2) : 'null'}`);
-      }
+    sceneNavigator.viroAppProps?.registerTapHandler?.(() => {
       if (placementRef.current.status !== 'ready') return;
       const hit = latestHitRef.current;
-      if (!hit) {
-        console.warn('[PetARScene] tapped but no hit result cached yet — keep camera on surface');
-        return;
-      }
-      const pos = hit.transform.position;
+      if (!hit) return;
+      const pos = hit.transform.position as Vec3;
+      petPosRef.current = pos;
+      setPetPos(pos);
       setPlacement({ status: 'placed', position: pos });
-      // 'placing' → ARWalkScreen shows feedback banner; ARWalkScreen transitions to
-      // 'placed' after GAME_CONFIG.ar.placingFeedbackMs so the ViroNode has time to render.
       sceneNavigator.viroAppProps?.onPlacementStateChanged?.('placing');
     });
-  // sceneNavigator is a stable reference — safe to omit from deps.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------------------------------------------------------------------------
-  // Render
-  // ---------------------------------------------------------------------------
+  // ---------- Render ----------
+
+  const frames = getMoodFrames(species, arMood);
+  const isStatic = frames.length === 1;
 
   return (
     <ViroARScene
       ref={arSceneRef}
       anchorDetectionTypes={placement.status !== 'placed' ? ['planesHorizontal'] : []}
       onTrackingUpdated={handleTrackingUpdated}
-      onCameraARHitTest={placement.status !== 'placed' ? handleCameraHitTest : undefined}
+      onCameraARHitTest={handleCameraHitTest}
     >
       <ViroAmbientLight color="#FFFFFF" intensity={200} />
+      <ViroDirectionalLight
+        color="#FFFFFF"
+        direction={[0, -1, -0.2]}
+        intensity={300}
+        castsShadow={false}
+      />
 
       {placement.status === 'placed' && (
-        <ViroNode position={placement.position}>
-          {/*
-           * PLACEHOLDER: replace with Viro3DObject once assets/ar/pet.glb is delivered:
-           *   <Viro3DObject
-           *     source={PET_MODEL_PATH}
-           *     position={[0, 0, 0]}
-           *     scale={[0.2, 0.2, 0.2]}
-           *     type="GLB"
-           *     animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: true }}
-           *   />
-           */}
-          <ViroSphere
-            position={[0, 0.1, 0]}
-            radius={0.1}
-            materials={['petPlaceholder']}
-            animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: true }}
-          />
+        <ViroNode position={petPos} rotation={[0, petYRot, 0]}>
+          {frames.map((src: Src, i: number) => (
+            <Viro3DObject
+              key={`${species}-${arMood}-${i}`}
+              source={src}
+              visible={i === arFrame}
+              position={[0, 0, 0]}
+              scale={isStatic ? PET_SCALE_STATIC : PET_SCALE_ANIMATED}
+              type="GLB"
+              // Idle pulse only on static single-frame moods; animated moods use frame cycling.
+              animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: isStatic }}
+            />
+          ))}
         </ViroNode>
       )}
     </ViroARScene>

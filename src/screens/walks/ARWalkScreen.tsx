@@ -11,7 +11,7 @@
  *
  * All user-facing strings are sourced from src/i18n/en.ts under the `ar` key.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, StatusBar, Platform } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -30,6 +30,9 @@ import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 import { PetARScene } from '@/ar/PetARScene';
+import { usePetStore } from '@/stores/petStore';
+import { useFeedActive } from '@/stores/progressStore';
+import { resolveDisplayMood, type DisplayMood } from '@/game/petMood';
 import type { ImageMarkerName } from '@/ar/arResources';
 import { GAME_CONFIG } from '@/game/config';
 
@@ -91,6 +94,26 @@ export function ARWalkScreen() {
   // sessionId links this AR session back to the walk record in the DB.
   // Kept available for future use (e.g. logging AR duration against the session).
   const _sessionId = route.params.sessionId; // eslint-disable-line @typescript-eslint/no-unused-vars
+
+  const activePet   = usePetStore((s) => s.activePet);
+  const feedActive  = useFeedActive();
+  const species     = activePet?.species ?? 'dog';
+  const arHour      = useMemo(() => new Date().getHours(), []);
+  const displayMood = useMemo<DisplayMood>(() => {
+    if (!activePet) return 'normal';
+    if (feedActive) return 'eating';
+    return resolveDisplayMood(activePet.mood, arHour);
+  }, [activePet, feedActive, arHour]);
+
+  // Ref to the scene's update callback — filled by registerSceneUpdate below.
+  const updateSceneRef = useRef<((species: string, mood: DisplayMood) => void) | null>(null);
+  function registerSceneUpdate(fn: (sp: string, mood: DisplayMood) => void) {
+    updateSceneRef.current = fn;
+  }
+  // Push species/mood changes into the live scene whenever they change.
+  useEffect(() => {
+    updateSceneRef.current?.(species, displayMood);
+  }, [species, displayMood]);
 
   // Whether the ViroARSceneNavigator is currently mounted.
   const [arActive, setArActive] = useState(true);
@@ -253,6 +276,9 @@ export function ARWalkScreen() {
             onMarkerFound: handleMarkerFound,
             onPlacementStateChanged: handlePlacementStateChanged,
             registerTapHandler,
+            registerSceneUpdate,
+            initialSpecies: species,
+            initialMood: displayMood,
           }}
         />
       )}
@@ -438,3 +464,4 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 });
+

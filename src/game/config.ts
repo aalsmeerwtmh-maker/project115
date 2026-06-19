@@ -31,6 +31,14 @@ export interface IapBundle {
   displayPrice: string;
 }
 
+export interface FoodItem {
+  id: string;
+  tokenCost: number;
+  staminaBoost: number;
+  affectionBoost: number;
+  emoji: string;
+}
+
 export interface TokenEarnRates {
   checkinPerCell: number;
   streakMilestoneEveryNDays: number;
@@ -43,6 +51,21 @@ export interface WalkEvents {
   intervalMinutes: number;
   /** Pet-perspective dialogue snippets shown during a walk. These are game content strings, not i18n keys. */
   dialogues: string[];
+}
+
+export interface WalkBossFightConfig {
+  stepTrigger: number;
+  timeTriggerSecs: number;
+  petHpPerStamina: number;
+  petDmgMin: number;
+  petDmgMax: number;
+  bossHpBase: number;
+  bossHpAffectionMultiplier: number;
+  bossHpFightMultiplier: number;
+  bossDmgPetHpFraction: number;
+  bossStaminaCost: number;
+  rewardBase: number;
+  rewardPerFight: number;
 }
 
 export interface ARConfig {
@@ -58,11 +81,21 @@ export interface ARConfig {
   minDepthConfidence: number;
   /** Milliseconds to show the "Placing…" state before transitioning to "placed". */
   placingFeedbackMs: number;
+  /** Horizontal distance (m) beyond which the pet starts walking toward the user. */
+  petFollowDistanceM: number;
+  /** Horizontal distance (m) within which the pet stops following and resumes its mood. */
+  petArriveDistanceM: number;
+  /** Metres the pet moves per step tick while following. */
+  petWalkStepM: number;
+  /** Milliseconds between each step tick while the pet is following the user. */
+  petWalkStepIntervalMs: number;
 }
 
 export interface GameConfig {
   bosses: BossDefinition[];
+  walkBossFight: WalkBossFightConfig;
   equipment: EquipmentItem[];
+  food: FoodItem[];
   iapBundles: IapBundle[];
   tokenEarnRates: TokenEarnRates;
   walkEvents: WalkEvents;
@@ -75,9 +108,31 @@ export interface GameConfig {
   };
   /** Token cost to rename a pet after the first (free) rename. */
   petRenameCost: number;
+  /** How long (ms) the eating display mood persists after the player feeds their pet. */
+  foodMoodDurationMs: number;
 }
 
 export const GAME_CONFIG: GameConfig = {
+  walkBossFight: {
+    stepTrigger: 200,
+    timeTriggerSecs: 300,
+    petHpPerStamina: 100,
+    // petDmgMin is the floor DMG regardless of affection (aff 0–20 all deal this).
+    // Only affection 100 reaches petDmgMax, which slightly exceeds bossHpBase → 1-shot.
+    petDmgMin: 20_000_000,
+    petDmgMax: 99_999_999,
+    bossHpBase: 99_000_000,
+    bossHpAffectionMultiplier: 0,   // boss HP does not scale with affection
+    bossHpFightMultiplier: 0.2,     // boss grows 20 % per fight
+    // Boss deals 1/bossDmgPetHpFraction of the pet's max HP per hit.
+    // At 7, a full-HP pet survives exactly 7 hits before going down.
+    bossDmgPetHpFraction: 7,
+    // Stamina drained from the pet each time a boss encounter starts.
+    bossStaminaCost: 5,
+    rewardBase: 20,
+    rewardPerFight: 10,
+  },
+
   tokenEarnRates: {
     checkinPerCell: 5,
     streakMilestoneEveryNDays: 7,
@@ -237,6 +292,12 @@ export const GAME_CONFIG: GameConfig = {
     },
   ],
 
+  food: [
+    { id: 'food_bread', tokenCost: 5,  staminaBoost: 5,  affectionBoost: 2,  emoji: '🍞' },
+    { id: 'food_milk',  tokenCost: 10, staminaBoost: 10, affectionBoost: 5,  emoji: '🥛' },
+    { id: 'food_feeds', tokenCost: 20, staminaBoost: 20, affectionBoost: 10, emoji: '🦴' },
+  ],
+
   iapBundles: [
     {
       productId: 'pawstep.tokens.small',
@@ -265,6 +326,10 @@ export const GAME_CONFIG: GameConfig = {
     },
     minDepthConfidence: 0.3,
     placingFeedbackMs: 700,
+    petFollowDistanceM: 2.0,
+    petArriveDistanceM: 0.5,
+    petWalkStepM: 0.025,
+    petWalkStepIntervalMs: 50,
   },
 
   petAnimationStepThresholds: {
@@ -274,6 +339,7 @@ export const GAME_CONFIG: GameConfig = {
   },
 
   petRenameCost: 5,
+  foodMoodDurationMs: 10 * 60 * 1000,
 
   walkEvents: {
     intervalMinutes: 10,

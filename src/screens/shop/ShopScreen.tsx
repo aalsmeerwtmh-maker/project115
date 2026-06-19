@@ -37,10 +37,13 @@ import type { Product } from '@/services/iap';
 import type { ItemDisplayState } from './components/ShopItemCard';
 
 export function ShopScreen() {
-  const tokens = useProgressStore((s) => s.tokens);
-  const spendTokens = useProgressStore((s) => s.spendTokens);
-  const activePet = usePetStore((s) => s.activePet);
+  const tokens        = useProgressStore((s) => s.tokens);
+  const spendTokens   = useProgressStore((s) => s.spendTokens);
+  const setFeedExpiry = useProgressStore((s) => s.setFeedExpiry);
+  const activePet       = usePetStore((s) => s.activePet);
+  const updateActivePet = usePetStore((s) => s.updateActivePet);
 
+  const [loadingFoodId, setLoadingFoodId] = useState<string | null>(null);
   const [ownedItems, setOwnedItems] = useState<Equipment[]>([]);
   const [iapProducts, setIapProducts] = useState<Product[]>([]);
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
@@ -158,6 +161,30 @@ export function ShopScreen() {
     }
   }
 
+  function getFoodDisplayName(id: string): string {
+    const sc = t.statusCheck;
+    if (id === 'food_bread') return sc.foodBread;
+    if (id === 'food_milk') return sc.foodMilk;
+    return sc.foodFeeds;
+  }
+
+  async function handleFeedFood(foodId: string): Promise<void> {
+    const food = GAME_CONFIG.food.find((f) => f.id === foodId);
+    if (!food || !activePet || tokens < food.tokenCost) return;
+    setLoadingFoodId(foodId);
+    try {
+      await spendTokens(food.tokenCost);
+      const newStamina   = Math.min(100, activePet.stamina + food.staminaBoost);
+      const newAffection = Math.min(100, activePet.affection + food.affectionBoost);
+      await updateActivePet({ stamina: newStamina, affection: newAffection });
+      await setFeedExpiry(Date.now() + GAME_CONFIG.foodMoodDurationMs);
+    } catch {
+      Alert.alert(t.shop.insufficientTokens);
+    } finally {
+      setLoadingFoodId(null);
+    }
+  }
+
   const catalogItems = GAME_CONFIG.equipment;
 
   return (
@@ -200,6 +227,35 @@ export function ShopScreen() {
             >
               <Text style={styles.restoreText}>{t.shop.restorePurchases}</Text>
             </TouchableOpacity>
+
+            <Text style={styles.sectionTitle}>{t.shop.foodSection}</Text>
+            {GAME_CONFIG.food.map((food) => {
+              const canAfford = tokens >= food.tokenCost;
+              return (
+                <View key={food.id} style={styles.foodCard}>
+                  <Text style={styles.foodEmoji}>{food.emoji}</Text>
+                  <View style={styles.foodInfo}>
+                    <Text style={styles.foodName}>{getFoodDisplayName(food.id)}</Text>
+                    <Text style={styles.foodStats}>
+                      {t.statusCheck.foodStats(food.staminaBoost, food.affectionBoost)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.feedBtn, !canAfford && styles.feedBtnDisabled]}
+                    onPress={() => void handleFeedFood(food.id)}
+                    disabled={!canAfford || loadingFoodId !== null}
+                    accessibilityRole="button"
+                  >
+                    <Text style={[styles.feedBtnText, !canAfford && styles.feedBtnTextDisabled]}>
+                      {t.statusCheck.feedButton}
+                    </Text>
+                    <Text style={[styles.feedBtnCost, !canAfford && styles.feedBtnTextDisabled]}>
+                      {food.tokenCost} 🪙
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })}
 
             <Text style={styles.sectionTitle}>{t.shop.equipmentSection}</Text>
           </View>
@@ -266,4 +322,31 @@ const styles = StyleSheet.create({
   iapLoader: {
     marginVertical: spacing.md,
   },
+  foodCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surface,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.border,
+    gap: spacing.sm,
+  },
+  foodEmoji: { fontSize: 32 },
+  foodInfo: { flex: 1 },
+  foodName: { ...typography.bodyBold, color: colors.textPrimary },
+  foodStats: { ...typography.caption, color: colors.textSecondary, marginTop: 2 },
+  feedBtn: {
+    backgroundColor: colors.primary,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+    minWidth: 64,
+  },
+  feedBtnDisabled: { backgroundColor: colors.border },
+  feedBtnText: { ...typography.label, color: '#FFFFFF' },
+  feedBtnCost: { ...typography.caption, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+  feedBtnTextDisabled: { color: colors.textSecondary },
 });

@@ -48,12 +48,15 @@ export const zhTW = {
     backButton: '返回',
   },
 
-  // Pet moods
+  // Pet moods (DB moods + time-based display moods)
   mood: {
     happy: '開心',
     normal: '普通',
     sad: '難過',
     excited: '興奮！',
+    sleeping: '睡覺中',
+    eating: '吃東西中',
+    walking: '散步中',
   },
 
   // Pet species
@@ -120,6 +123,7 @@ export const zhTW = {
     ownedBadge: '已擁有',
     equippedBadge: '已裝備',
     insufficientTokens: '代幣不足',
+    foodSection: '食物與恢復',
     restorePurchases: '恢復購買',
     iapBuyButton: '購買',
     categoryHat: '帽子',
@@ -177,6 +181,62 @@ export const zhTW = {
     insufficientTokens: '代幣不足',
     save: '儲存',
     cancel: '取消',
+  },
+
+  // Status Check screen
+  statusCheck: {
+    title: '狀態查看',
+    moodMessage: {
+      sleeping: (name: string) => `${name} 正在睡覺`,
+      eating: (name: string) => `${name} 正在吃東西`,
+      walking: (name: string) => `${name} 正在散步！`,
+      happy: (name: string) => `${name} 很開心！`,
+      normal: (name: string) => `${name} 狀態良好`,
+      sad: (name: string) => `${name} 感到難過`,
+      excited: (name: string) => `${name} 好興奮！`,
+    },
+    greeting: {
+      morning: '早安！',
+      afternoon: '午安！',
+      evening: '晚安！',
+      night: '晚安！',
+    },
+    stamina: '體力',
+    affection: '親密度',
+    feedSection: (name: string) => `餵食 ${name}`,
+    feedButton: '餵食',
+    foodStats: (stamina: number, affection: number) => `+${stamina} 體力 · +${affection} 親密度`,
+    insufficientTokens: '代幣不足',
+    fedToast: (name: string, food: string) => `${name} 很喜歡這份 ${food}！`,
+    visitShop: '前往商店',
+    tokenBalance: (n: number) => `${n} 代幣`,
+    foodBread: '麵包',
+    foodMilk: '牛奶',
+    foodFeeds: '飼料',
+  },
+
+  // Walk boss encounter
+  walkBoss: {
+    encounterTitle: '遭遇強敵！',
+    bossName: '野生頭目',
+    fightCount: (n: number) => `第 ${n + 1} 次遭遇`,
+    bossHpLabel: '頭目 HP',
+    petHpLabel: (name: string) => `${name} 的 HP`,
+    dmgLabel: '傷害',
+    attackButton: '攻擊！',
+    winTitle: '勝利！',
+    winReward: (n: number) => `獲得 +${n} 代幣！`,
+    loseTitle: '你的寵物精疲力竭了！',
+    loseMessage: '前往商店購買食物，恢復寵物體力。',
+    shopButton: '前往商店',
+    continueButton: '繼續散步',
+    giveUpButton: '放棄挑戰',
+    exitButton: '離開',
+    exitConfirmTitle: '離開挑戰？',
+    exitConfirmMessage: '你的進度將遺失。',
+    exitConfirmYes: '離開',
+    exitConfirmNo: '留下',
+    challengeBossButton: '挑戰頭目',
   },
 
   // Common / shared

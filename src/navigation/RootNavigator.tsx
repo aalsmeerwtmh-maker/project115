@@ -8,6 +8,7 @@ import { ShopScreen } from '@/screens/shop/ShopScreen';
 import { ExplorationMapScreen } from '@/screens/walks/ExplorationMapScreen';
 import { PrivacyPolicyScreen } from '@/screens/legal/PrivacyPolicyScreen';
 import { TermsScreen } from '@/screens/legal/TermsScreen';
+import { StatusCheckScreen } from '@/screens/statuscheck/StatusCheckScreen';
 import type { RootStackParamList } from './types';
 
 // The root navigator is a native stack that sits above the tab bar.
@@ -20,6 +21,7 @@ import type { RootStackParamList } from './types';
 //   ├── ARWalk        (full-screen modal, launched from the Walks tab)
 //   ├── Boss          (full-screen boss challenge list)
 //   ├── Shop          (equipment shop)
+//   ├── StatusCheck   (pet mood + food shop, launched from Home widget)
 //   ├── ExplorationMap (full-screen map of visited cells)
 //   ├── PrivacyPolicy (legal screen, linked from Profile → About)
 //   └── Terms         (legal screen, linked from Profile → About)
@@ -44,6 +46,7 @@ export function RootNavigator({ initialRoute = 'Main' }: RootNavigatorProps) {
         />
         <Stack.Screen name="Boss" component={BossScreen} />
         <Stack.Screen name="Shop" component={ShopScreen} />
+        <Stack.Screen name="StatusCheck" component={StatusCheckScreen} />
         <Stack.Screen name="ExplorationMap" component={ExplorationMapScreen} />
         <Stack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
         <Stack.Screen name="Terms" component={TermsScreen} />

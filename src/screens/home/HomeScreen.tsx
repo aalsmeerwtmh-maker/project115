@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -7,14 +7,16 @@ import type { RootStackParamList } from '@/navigation/types';
 import { usePetStore } from '@/stores/petStore';
 import { useStepStore } from '@/stores/stepStore';
 import { useSettingsStore } from '@/stores/settingsStore';
-import { useProgressStore } from '@/stores/progressStore';
+import { useProgressStore, useFeedActive } from '@/stores/progressStore';
 import { useStepCounter } from '@/hooks/useStepCounter';
-import { PetAvatar, PET_IMAGES } from '@/components/PetAvatar';
+import { PET_IMAGES } from '@/components/PetAvatar';
+import { PetStateDisplay } from '@/components/PetStateDisplay';
 import { DailyCheckinModal } from './components/DailyCheckinModal';
 import { RenameModal } from './components/RenameModal';
 import { getLastCheckinDate, setLastCheckinDate, getProgress, setProgress } from '@/db/repositories/progress';
 import { computeStreak } from '@/game/streaks';
 import { isStreakMilestone, calcStreakBonus, checkinTokenAmount } from '@/game/tokens';
+import { resolveDisplayMood, type DisplayMood } from '@/game/petMood';
 import { hapticReward, hapticSuccess } from '@/services/haptics';
 import { colors } from '@/theme/colors';
 import { spacing } from '@/theme/spacing';
@@ -49,6 +51,7 @@ export function HomeScreen() {
   const streakCurrent = useProgressStore((s) => s.streakCurrent);
   const setStreakCurrent = useProgressStore((s) => s.setStreakCurrent);
   const addTokens = useProgressStore((s) => s.addTokens);
+  const feedActive = useFeedActive();
 
   const steps = today?.stepCount ?? 0;
   const goal = dailyGoal;
@@ -56,7 +59,13 @@ export function HomeScreen() {
   const stepsToGo = Math.max(goal - steps, 0);
   const progress = Math.min(steps / goal, 1);
 
-  const moodLabel = activePet ? t.mood[activePet.mood] : t.mood.normal;
+  const hour = useMemo(() => new Date().getHours(), []);
+  const displayMood = useMemo<DisplayMood>(() => {
+    if (!activePet) return 'normal';
+    if (feedActive) return 'eating';
+    return resolveDisplayMood(activePet.mood, hour);
+  }, [activePet, hour, feedActive]);
+  const moodLabel = t.mood[displayMood];
 
   const handleSwitchSpecies = useCallback(async (species: PetSpecies) => {
     if (!activePet || activePet.species === species) return;
@@ -181,11 +190,11 @@ export function HomeScreen() {
           <View style={styles.heroAvatarContainer}>
             <View style={styles.heroAvatar}>
               {activePet ? (
-                <PetAvatar
+                <PetStateDisplay
                   species={activePet.species}
-                  name={activePet.name}
-                  mood={activePet.mood}
+                  displayMood={displayMood}
                   size={240}
+                  showBadge={false}
                 />
               ) : (
                 <View style={styles.heroAvatarEmpty}>
@@ -257,8 +266,14 @@ export function HomeScreen() {
 
         {/* Bento Grid */}
         <View style={styles.bentoGrid}>
-          {/* Steps Widget */}
-          <View style={styles.widgetCard}>
+          {/* Steps Widget — taps through to the Walks tab */}
+          <TouchableOpacity
+            style={styles.widgetCard}
+            onPress={() => navigation.navigate('Walks')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="View daily progress and walks"
+          >
             <View style={styles.widgetHeader}>
               <View>
                 <Text style={styles.widgetLabel}>Daily Progress</Text>
@@ -275,10 +290,16 @@ export function HomeScreen() {
             <View style={styles.progressBarTrack}>
               <View style={[styles.progressBarFill, { width: `${progress * 100}%` }]} />
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Pet Mood Widget */}
-          <View style={styles.widgetCard}>
+          <TouchableOpacity
+            style={styles.widgetCard}
+            onPress={() => navigation.navigate('StatusCheck')}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Open status check"
+          >
             <View style={styles.widgetHeader}>
               <View>
                 <Text style={styles.widgetLabel}>Status Check</Text>
@@ -304,11 +325,11 @@ export function HomeScreen() {
               <View style={styles.moodTextBlock}>
                 <Text style={styles.moodStatusLabel}>{moodLabel}</Text>
                 <Text style={styles.moodStatusDescription} numberOfLines={2}>
-                  {activePet?.name ?? 'Your pet'} is feeling {activePet?.mood ?? 'normal'} today!
+                  {t.statusCheck.moodMessage[displayMood](activePet?.name ?? 'Your pet')}
                 </Text>
               </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {/* Today's Goal Widget */}
           <View style={[styles.widgetCard, styles.goalWidgetCard]}>
@@ -733,3 +754,5 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+

@@ -9,6 +9,7 @@ export type RootStackParamList = {
   ARWalk: { sessionId: string }; // links the AR session back to a walk record in the DB
   Boss: undefined;
   Shop: undefined;
+  StatusCheck: undefined;
   ExplorationMap: undefined;
   PrivacyPolicy: undefined;
   Terms: undefined;

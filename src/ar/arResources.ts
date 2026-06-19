@@ -1,91 +1,101 @@
-/**
- * AR asset constants and animation registration for PawStep.
- *
- * PLACEHOLDER NOTE: assets/ar/pet.glb does not exist yet. The pet model path
- * is declared here as a comment so it is easy to wire up once the art team
- * delivers the file. Until then, PetARScene.tsx uses a ViroSphere as a stand-in.
- * Do NOT generate or source any art — all 3-D assets are human-authored by the team.
- *
- * When the model arrives, uncomment PET_MODEL_PATH below and update PetARScene.tsx
- * to use Viro3DObject instead of ViroSphere.
- */
 import { Platform } from 'react-native';
 import { ViroAnimations, ViroMaterials, ViroARTrackingTargets } from '@reactvision/react-viro';
 
 // ---------------------------------------------------------------------------
-// Asset path constants
+// 3D model registry — one entry per species, one field per display mood.
+// walk and excited hold tuples for frame-cycling animation.
 // ---------------------------------------------------------------------------
 
-/**
- * PLACEHOLDER — assets/ar/pet.glb is not yet provided by the art team.
- * Uncomment the line below once the model file is placed in assets/ar/.
- *
- * export const PET_MODEL_PATH = require('../../assets/ar/pet.glb');
- */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Src = any; // Metro require() returns a number; typed loosely so Viro accepts it
+
+export interface PetARMoodModels {
+  stand:    Src;
+  sleeping: Src;
+  eating:   Src;
+  walk:     readonly Src[]; // 2 or 3 frames depending on species
+  excited:  readonly Src[];
+  happy:    readonly Src[];
+}
+
+export const PET_AR_MODELS: Record<string, PetARMoodModels> = {
+  dog: {
+    stand:    require('../../assets/ar/models/pet_dog_stand.glb'),
+    sleeping: require('../../assets/ar/models/pet_dog_sleep.glb'),
+    eating:   require('../../assets/ar/models/pet_dog_eat.glb'),
+    // 3 run frames used for walk — smoother than the 2-frame walk cycle.
+    walk: [
+      require('../../assets/ar/models/pet_dog_run_1.glb'),
+      require('../../assets/ar/models/pet_dog_run_2.glb'),
+      require('../../assets/ar/models/pet_dog_run_3.glb'),
+    ],
+    excited: [
+      require('../../assets/ar/models/pet_dog_run_1.glb'),
+      require('../../assets/ar/models/pet_dog_run_2.glb'),
+      require('../../assets/ar/models/pet_dog_run_3.glb'),
+    ],
+    happy: [require('../../assets/ar/models/pet_dog_stand.glb')],
+  },
+
+  cat: {
+    stand:    require('../../assets/ar/models/pet_cat_stand.glb'),
+    sleeping: require('../../assets/ar/models/pet_cat_sleep.glb'),
+    eating:   require('../../assets/ar/models/pet_cat_eat.glb'),
+    walk: [
+      require('../../assets/ar/models/pet_cat_walk_1.glb'),
+      require('../../assets/ar/models/pet_cat_walk_2.glb'),
+    ],
+    excited: [require('../../assets/ar/models/pet_cat_wool.glb')],
+    happy: [
+      require('../../assets/ar/models/pet_cat_lick_1.glb'),
+      require('../../assets/ar/models/pet_cat_lick_2.glb'),
+    ],
+  },
+
+  bird: {
+    stand:    require('../../assets/ar/models/pet_bird_stand.glb'),
+    sleeping: require('../../assets/ar/models/pet_bird_sleep.glb'),
+    eating:   require('../../assets/ar/models/pet_bird_eat.glb'),
+    walk: [
+      require('../../assets/ar/models/pet_bird_fly_1.glb'),
+      require('../../assets/ar/models/pet_bird_fly_2.glb'),
+    ],
+    excited: [
+      require('../../assets/ar/models/pet_bird_jump_1.glb'),
+      require('../../assets/ar/models/pet_bird_jump_2.glb'),
+    ],
+    happy: [
+      require('../../assets/ar/models/pet_bird_jump_1.glb'),
+      require('../../assets/ar/models/pet_bird_jump_2.glb'),
+    ],
+  },
+};
 
 // ---------------------------------------------------------------------------
 // Animation registration
 // ---------------------------------------------------------------------------
 
-/**
- * Idle pulse: the pet subtly scales up and back to draw the user's eye.
- *
- * Expressed as an inline two-step chain (scale up → scale back), registered
- * under the single key 'petIdlePulse'. ViroAnimationDict accepts arrays of
- * ViroRegisterableAnimation as sequence chains.
- *
- * Registered once at module import time; subsequent calls with the same key
- * are safe — Viro ignores duplicates.
- */
 ViroAnimations.registerAnimations({
+  // Gentle idle scale-pulse used on single-frame static poses (stand, sleep, eat).
   petIdlePulse: [
-    // Scale up — 0.5 s
-    {
-      duration: 500,
-      easing: 'EaseInEaseOut',
-      properties: { scaleX: 1.05, scaleY: 1.05, scaleZ: 1.05 },
-    },
-    // Scale back — 0.5 s
-    {
-      duration: 500,
-      easing: 'EaseInEaseOut',
-      properties: { scaleX: 1.0, scaleY: 1.0, scaleZ: 1.0 },
-    },
+    { duration: 1200, easing: 'EaseInEaseOut', properties: { scaleX: 1.03, scaleY: 1.03, scaleZ: 1.03 } },
+    { duration: 1200, easing: 'EaseInEaseOut', properties: { scaleX: 1.0,  scaleY: 1.0,  scaleZ: 1.0  } },
   ],
 });
 
-/**
- * Animation name to pass to ViroAnimatedComponent's `animation` prop.
- * Usage: animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: true }}
- */
 export const IDLE_ANIMATION_NAME = 'petIdlePulse';
-
-// Orange material for the placeholder sphere so it is clearly visible.
-ViroMaterials.createMaterials({
-  petPlaceholder: {
-    lightingModel: 'Constant',
-    diffuseColor: '#F5A623',
-  },
-});
 
 // ---------------------------------------------------------------------------
 // Image marker registration
-//
-// PLACEHOLDER — replace placeholder_*.png with real team-authored images before demo.
-// ViroARTrackingTargets.createTargets runs at module load time, the same as
-// ViroAnimations.registerAnimations above — safe to call multiple times with
-// the same keys (Viro ignores duplicates).
 // ---------------------------------------------------------------------------
 
-// Halves ARCore detection workload on Android with no effect on iOS ARKit.
 export const PLANE_ALIGNMENT: 'HorizontalUpward' | 'Horizontal' = Platform.select({
   android: 'HorizontalUpward',
   default: 'Horizontal',
 });
 
-// Hit-test result priority: prefer the most stable/accurate type.
 export const HIT_TEST_PRIORITY: string[] = [
-  'ExistingPlaneUsingExtent', // hit is within measured plane bounds — most reliable, won't false-positive at distance
+  'ExistingPlaneUsingExtent',
   'ExistingPlane',
   'EstimatedHorizontalPlane',
   'FeaturePoint',
@@ -93,22 +103,26 @@ export const HIT_TEST_PRIORITY: string[] = [
 
 export const IMAGE_MARKER_TOKEN_REWARD = 25;
 
+ViroMaterials.createMaterials({
+  petPlaceholder: {
+    lightingModel: 'Constant',
+    diffuseColor: '#F5A623',
+  },
+});
+
 ViroARTrackingTargets.createTargets({
-  // PLACEHOLDER — replace with real team-authored image asset before demo.
   markerAlpha: {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     source: require('../../assets/ar/markers/placeholder_alpha.png'),
     orientation: 'Up',
-    physicalWidth: 0.2, // 20 cm physical width
+    physicalWidth: 0.2,
   },
-  // PLACEHOLDER — replace with real team-authored image asset before demo.
   markerBeta: {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     source: require('../../assets/ar/markers/placeholder_beta.png'),
     orientation: 'Up',
     physicalWidth: 0.2,
   },
-  // PLACEHOLDER — replace with real team-authored image asset before demo.
   markerGamma: {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     source: require('../../assets/ar/markers/placeholder_gamma.png'),

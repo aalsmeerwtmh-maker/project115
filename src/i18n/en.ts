@@ -48,12 +48,15 @@ export const en = {
     backButton: 'Back',
   },
 
-  // Pet moods
+  // Pet moods (DB moods + time-based display moods)
   mood: {
     happy: 'Happy',
     normal: 'Normal',
     sad: 'Sad',
     excited: 'Excited!',
+    sleeping: 'Sleeping',
+    eating: 'Eating',
+    walking: 'Walking',
   },
 
   // Pet species
@@ -120,6 +123,7 @@ export const en = {
     ownedBadge: 'Owned',
     equippedBadge: 'Equipped',
     insufficientTokens: 'Not enough tokens',
+    foodSection: 'Food & Healing',
     restorePurchases: 'Restore Purchases',
     iapBuyButton: 'Buy',
     categoryHat: 'Hats',
@@ -178,6 +182,62 @@ export const en = {
     insufficientTokens: 'Not enough tokens',
     save: 'Save',
     cancel: 'Cancel',
+  },
+
+  // Status Check screen
+  statusCheck: {
+    title: 'Status Check',
+    moodMessage: {
+      sleeping: (name: string) => `${name} is sleeping`,
+      eating: (name: string) => `${name} is eating`,
+      walking: (name: string) => `${name} is out walking!`,
+      happy: (name: string) => `${name} is happy!`,
+      normal: (name: string) => `${name} is doing well`,
+      sad: (name: string) => `${name} is feeling sad`,
+      excited: (name: string) => `${name} is so excited!`,
+    },
+    greeting: {
+      morning: 'Good morning!',
+      afternoon: 'Good afternoon!',
+      evening: 'Good evening!',
+      night: 'Good night!',
+    },
+    stamina: 'Stamina',
+    affection: 'Affection',
+    feedSection: (name: string) => `Feed ${name}`,
+    feedButton: 'Feed',
+    foodStats: (stamina: number, affection: number) => `+${stamina} stamina · +${affection} affection`,
+    insufficientTokens: 'Not enough tokens',
+    fedToast: (name: string, food: string) => `${name} enjoyed the ${food}!`,
+    visitShop: 'Visit Shop',
+    tokenBalance: (n: number) => `${n} tokens`,
+    foodBread: 'Bread',
+    foodMilk: 'Milk',
+    foodFeeds: 'Feeds',
+  },
+
+  // Walk boss encounter
+  walkBoss: {
+    encounterTitle: 'Boss Encounter!',
+    bossName: 'Wild Boss',
+    fightCount: (n: number) => `Encounter #${n + 1}`,
+    bossHpLabel: 'Boss HP',
+    petHpLabel: (name: string) => `${name}'s HP`,
+    dmgLabel: 'DMG',
+    attackButton: 'Attack!',
+    winTitle: 'Victory!',
+    winReward: (n: number) => `+${n} tokens earned!`,
+    loseTitle: 'Your pet is exhausted!',
+    loseMessage: 'Visit the shop to buy food and restore your pet.',
+    shopButton: 'Go to Shop',
+    continueButton: 'Continue Walk',
+    giveUpButton: 'Give Up',
+    exitButton: 'Exit',
+    exitConfirmTitle: 'Leave Challenge?',
+    exitConfirmMessage: 'Your progress will be lost.',
+    exitConfirmYes: 'Leave',
+    exitConfirmNo: 'Stay',
+    challengeBossButton: 'Challenge Boss',
   },
 
   // Common / shared

@@ -126,6 +126,12 @@ eas device:create
 eas build --profile development --platform ios
 ```
 
+> **No paid Apple Developer account?** The EAS iOS flow above requires the $99/yr Apple Developer
+> Program (a device `.ipa` must be code-signed). To build for a physical iPhone for **testing only**
+> with a *free* Apple ID, use free provisioning on a Mac instead — see
+> [docs/ios-test-build.md](docs/ios-test-build.md). Note: the iOS Simulator can't test step
+> counting or GPS, so it isn't a substitute for a device build.
+
 ### EAS build profiles cheat sheet
 
 | Profile | Distribution | Android output | iOS output | Use for |
@@ -302,4 +308,5 @@ GOOGLE_MAPS_ANDROID_KEY=your_key_here
 | [docs/customization.md](docs/customization.md) | Game balance tuning, UI theme, text copy, notifications — the "change things quickly" guide |
 | [docs/assets.md](docs/assets.md) | Complete art handoff checklist with exact specs and wiring instructions |
 | [docs/dev-workflow.md](docs/dev-workflow.md) | Day-to-day developer guide: environment setup, common tasks, error reference |
+| [docs/ios-test-build.md](docs/ios-test-build.md) | Building for a physical iPhone with a free Apple ID (no paid account), via free provisioning |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines and code review checklist |

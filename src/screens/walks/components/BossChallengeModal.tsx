@@ -1,17 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Image,
   Modal,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useProgressStore } from '@/stores/progressStore';
+import { usePetStore } from '@/stores/petStore';
 import { colors } from '@/theme/colors';
 import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
+import { GAME_CONFIG } from '@/game/config';
 import { calcBossHp, calcBossDmg, calcPetHp, calcPetDmg, calcReward } from '@/game/bossFight';
 
 // ---------------------------------------------------------------------------
@@ -21,7 +26,6 @@ import { calcBossHp, calcBossDmg, calcPetHp, calcPetDmg, calcReward } from '@/ga
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Img = any;
 
-// Dog frames are also used as the fallback, so they live outside the Record.
 const DOG_FRAMES: readonly Img[] = [
   require('../../../../assets/vs/boss_vs_dog_1.png'),
   require('../../../../assets/vs/boss_vs_dog_2.png'),
@@ -57,17 +61,19 @@ const VS_FRAMES: Record<string, readonly Img[]> = {
 // ---------------------------------------------------------------------------
 // Fight state machine
 // idle → petAttacking → [won | bossAttacking] → [lost | idle]
+// lost → shopping (inline food shop) → [idle (bought food) | lost (exited)]
 // ---------------------------------------------------------------------------
 
-type FightPhase = 'idle' | 'petAttacking' | 'bossAttacking' | 'won' | 'lost';
+type FightPhase = 'idle' | 'petAttacking' | 'bossAttacking' | 'won' | 'lost' | 'shopping';
 
 function getFrameIndex(phase: FightPhase, tick: number): number {
   switch (phase) {
     case 'idle':          return 0;
-    case 'petAttacking':  return tick % 2 === 0 ? 2 : 4; // frames 3 & 5
-    case 'bossAttacking': return tick % 2 === 0 ? 1 : 3; // frames 2 & 4
+    case 'petAttacking':  return tick % 2 === 0 ? 2 : 4;
+    case 'bossAttacking': return tick % 2 === 0 ? 1 : 3;
     case 'won':           return 6;
-    case 'lost':          return 3;
+    case 'lost':
+    case 'shopping':      return 3;
   }
 }
 
@@ -100,15 +106,6 @@ const hpStyles = StyleSheet.create({
 });
 
 // ---------------------------------------------------------------------------
-// Snapshot passed to onShopPress so the parent can resume the fight later
-// ---------------------------------------------------------------------------
-
-export interface BossFightSnapshot {
-  bossHp: number;
-  bossMaxHp: number;
-}
-
-// ---------------------------------------------------------------------------
 // Props
 // ---------------------------------------------------------------------------
 
@@ -119,23 +116,20 @@ export interface BossChallengeModalProps {
   stamina: number;
   affection: number;
   fightCount: number;
-  /**
-   * When non-null the fight resumes at these values instead of starting fresh.
-   * Set by the parent after the user returns from the Shop screen.
-   */
-  continueBossHp?: number;
-  continueBossMaxHp?: number;
-  /** Pet HP to restore when resuming (based on food bought in the Shop). */
-  continuePetHp?: number;
   /** Called when "Continue Walk" is pressed after winning. */
   onWin: (tokensEarned: number) => void;
-  /**
-   * Called when "Go to Shop" is pressed after losing.
-   * Receives a snapshot of the current boss HP so the fight can resume.
-   */
-  onShopPress: (snapshot: BossFightSnapshot) => void;
   /** Called when "Give Up" is pressed — fight count increments, modal closes. */
   onGiveUp: () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Food display name helper
+// ---------------------------------------------------------------------------
+
+function getFoodDisplayName(id: string): string {
+  if (id === 'food_bread') return t.statusCheck.foodBread;
+  if (id === 'food_milk') return t.statusCheck.foodMilk;
+  return t.statusCheck.foodFeeds;
 }
 
 // ---------------------------------------------------------------------------
@@ -149,59 +143,54 @@ export function BossChallengeModal({
   stamina,
   affection,
   fightCount,
-  continueBossHp,
-  continueBossMaxHp,
-  continuePetHp,
   onWin,
-  onShopPress,
   onGiveUp,
 }: BossChallengeModalProps) {
+  const tokens        = useProgressStore((s) => s.tokens);
+  const spendTokens   = useProgressStore((s) => s.spendTokens);
+  const activePet     = usePetStore((s) => s.activePet);
+  const updateActivePet = usePetStore((s) => s.updateActivePet);
+
   const frames = VS_FRAMES[species] ?? DOG_FRAMES;
   const reward = calcReward(fightCount);
 
-  const [phase, setPhase]             = useState<FightPhase>('idle');
-  const [tick, setTick]               = useState(0);
-  const [petHp, setPetHp]             = useState(0);
-  const [petMaxHp, setPetMaxHp]       = useState(0);
-  const [bossHp, setBossHp]           = useState(0);
-  const [bossMaxHp, setBossMaxHp]     = useState(0);
+  const [phase, setPhase]               = useState<FightPhase>('idle');
+  const [tick, setTick]                 = useState(0);
+  const [petHp, setPetHp]               = useState(0);
+  const [petMaxHp, setPetMaxHp]         = useState(0);
+  const [bossHp, setBossHp]             = useState(0);
+  const [bossMaxHp, setBossMaxHp]       = useState(0);
   const [bossDmgFlash, setBossDmgFlash] = useState<number | null>(null);
   const [petDmgFlash, setPetDmgFlash]   = useState<number | null>(null);
+  const [loadingFoodId, setLoadingFoodId] = useState<string | null>(null);
 
-  // Stable refs so setTimeout closures always see the latest HP values.
-  const petHpRef    = useRef(petHp);
-  const bossHpRef   = useRef(bossHp);
+  const petHpRef     = useRef(petHp);
+  const bossHpRef    = useRef(bossHp);
   const bossMaxHpRef = useRef(bossMaxHp);
   const petMaxHpRef  = useRef(petMaxHp);
-  const phaseRef    = useRef(phase);
-  petHpRef.current    = petHp;
-  bossHpRef.current   = bossHp;
+  const phaseRef     = useRef(phase);
+  petHpRef.current     = petHp;
+  bossHpRef.current    = bossHp;
   bossMaxHpRef.current = bossMaxHp;
   petMaxHpRef.current  = petMaxHp;
-  phaseRef.current    = phase;
+  phaseRef.current     = phase;
 
-  // Reset (or resume) whenever the modal opens or continuation props change.
+  // Reset whenever the modal opens with a fresh fight.
   useEffect(() => {
     if (!visible) return;
     const maxHp = calcPetHp(stamina);
-    const bHp     = continueBossHp   ?? calcBossHp(affection, fightCount);
-    const bMaxHp  = continueBossMaxHp ?? bHp;
-    // When resuming, the pet's HP comes from the parent (based on food bought).
-    // Cap at the new maxHp so a stamina reduction doesn't over-restore.
-    const pHp = continuePetHp !== undefined
-      ? Math.min(maxHp, Math.max(1, continuePetHp))
-      : maxHp;
-    setPetHp(pHp);
+    const bHp   = calcBossHp(affection, fightCount);
+    setPetHp(maxHp);
     setPetMaxHp(maxHp);
     setBossHp(bHp);
-    setBossMaxHp(bMaxHp);
+    setBossMaxHp(bHp);
     setPhase('idle');
     setTick(0);
     setBossDmgFlash(null);
     setPetDmgFlash(null);
-  // Re-run only when modal opens or continuation state changes.
+    setLoadingFoodId(null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, continueBossHp, continueBossMaxHp, continuePetHp]);
+  }, [visible]);
 
   // Tick counter drives frame cycling during active attack phases.
   useEffect(() => {
@@ -213,13 +202,11 @@ export function BossChallengeModal({
   function handleAttack() {
     if (phaseRef.current !== 'idle') return;
     const petDmg  = calcPetDmg(affection);
-    // Boss DMG = 1/7 of pet's max HP so a full-HP pet survives exactly 7 hits.
     const bossDmg = calcBossDmg(petMaxHpRef.current);
 
     setTick(0);
     setPhase('petAttacking');
 
-    // Pet hits boss after 750 ms of animation.
     setTimeout(() => {
       const newBossHp = Math.max(0, bossHpRef.current - petDmg);
       setBossHp(newBossHp);
@@ -231,7 +218,6 @@ export function BossChallengeModal({
         return;
       }
 
-      // Small pause then boss counterattacks.
       setTimeout(() => {
         setTick(0);
         setPhase('bossAttacking');
@@ -248,8 +234,26 @@ export function BossChallengeModal({
     }, 750);
   }
 
-  const frameIndex = getFrameIndex(phase, tick);
-  const frameSrc: Img = (frames[frameIndex] ?? frames[0]) as Img;
+  async function handleBuyFood(foodId: string) {
+    const food = GAME_CONFIG.food.find((f) => f.id === foodId);
+    if (!food || tokens < food.tokenCost) return;
+    setLoadingFoodId(foodId);
+    try {
+      await spendTokens(food.tokenCost);
+      const currentStamina   = activePet?.stamina   ?? 20;
+      const currentAffection = activePet?.affection ?? 0;
+      const newStamina   = Math.min(100, currentStamina   + food.staminaBoost);
+      const newAffection = Math.min(100, currentAffection + food.affectionBoost);
+      await updateActivePet({ stamina: newStamina, affection: newAffection });
+      const newMaxHp  = calcPetHp(newStamina);
+      const healedHp  = food.staminaBoost * GAME_CONFIG.walkBossFight.petHpPerStamina;
+      setPetMaxHp(newMaxHp);
+      setPetHp(Math.min(newMaxHp, Math.max(1, healedHp)));
+      setPhase('idle');
+    } finally {
+      setLoadingFoodId(null);
+    }
+  }
 
   function handleExitPress() {
     Alert.alert(
@@ -262,88 +266,152 @@ export function BossChallengeModal({
     );
   }
 
+  const frameIndex = getFrameIndex(phase, tick);
+  const frameSrc: Img = (frames[frameIndex] ?? frames[0]) as Img;
+
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={styles.overlay}>
         <View style={styles.card}>
-          {/* Header row with exit button */}
-          <View style={styles.headerRow}>
-            <View style={styles.headerText}>
-              <Text style={styles.title}>{t.walkBoss.encounterTitle}</Text>
-              <Text style={styles.subtitle}>{t.walkBoss.fightCount(fightCount)}</Text>
-            </View>
-            {(phase === 'idle' || phase === 'petAttacking' || phase === 'bossAttacking') && (
-              <TouchableOpacity style={styles.exitButton} onPress={handleExitPress} activeOpacity={0.7}>
-                <Text style={styles.exitButtonText}>{t.walkBoss.exitButton}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
 
-          <HpBar
-            current={bossHp}
-            max={bossMaxHp}
-            label={t.walkBoss.bossHpLabel}
-            barColor={colors.error}
-          />
-
-          {/* VS image + damage flash numbers */}
-          <View style={styles.imageContainer}>
-            <Image source={frameSrc} style={styles.vsImage} resizeMode="contain" />
-            {bossDmgFlash != null && (
-              <View style={styles.dmgBossContainer} pointerEvents="none">
-                <Text style={styles.dmgBossText}>-{bossDmgFlash.toLocaleString()}</Text>
+          {/* ── Inline food shop panel ── */}
+          {phase === 'shopping' && (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.shopHeader}>
+                <Text style={styles.shopTitle}>{t.walkBoss.shopTitle}</Text>
+                <Text style={styles.shopSubtitle}>{t.walkBoss.shopSubtitle}</Text>
+                <Text style={styles.tokenBalance}>{t.statusCheck.tokenBalance(tokens)}</Text>
               </View>
-            )}
-            {petDmgFlash != null && (
-              <View style={styles.dmgPetContainer} pointerEvents="none">
-                <Text style={styles.dmgPetText}>-{petDmgFlash.toLocaleString()}</Text>
-              </View>
-            )}
-          </View>
 
-          {/* Pet HP */}
-          <HpBar
-            current={petHp}
-            max={petMaxHp}
-            label={t.walkBoss.petHpLabel(petName)}
-            barColor={colors.success}
-          />
+              {GAME_CONFIG.food.map((food) => {
+                const canAfford = tokens >= food.tokenCost;
+                const isLoading = loadingFoodId === food.id;
+                const hpRestore = food.staminaBoost * GAME_CONFIG.walkBossFight.petHpPerStamina;
+                return (
+                  <TouchableOpacity
+                    key={food.id}
+                    style={[styles.foodRow, !canAfford && styles.foodRowDisabled]}
+                    onPress={() => { void handleBuyFood(food.id); }}
+                    disabled={!canAfford || loadingFoodId !== null}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                  >
+                    <Text style={styles.foodEmoji}>{food.emoji}</Text>
+                    <View style={styles.foodInfo}>
+                      <Text style={[styles.foodName, !canAfford && styles.foodNameDisabled]}>
+                        {getFoodDisplayName(food.id)}
+                      </Text>
+                      <Text style={styles.foodStats}>
+                        {t.statusCheck.foodStats(food.staminaBoost, food.affectionBoost)}
+                        {' · '}
+                        +{hpRestore.toLocaleString()} HP
+                      </Text>
+                    </View>
+                    {isLoading
+                      ? <ActivityIndicator color="#FFFFFF" size="small" />
+                      : (
+                        <Text style={[styles.foodCost, !canAfford && styles.foodCostDisabled]}>
+                          {food.tokenCost} 🪙
+                        </Text>
+                      )
+                    }
+                  </TouchableOpacity>
+                );
+              })}
 
-          {/* Attack button — only shown while fighting */}
-          {phase === 'idle' && (
-            <TouchableOpacity style={styles.attackButton} onPress={handleAttack} activeOpacity={0.75}>
-              <Text style={styles.attackButtonText}>{t.walkBoss.attackButton}</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Win result */}
-          {phase === 'won' && (
-            <View style={styles.resultContainer}>
-              <Text style={styles.winTitle}>{t.walkBoss.winTitle}</Text>
-              <Text style={styles.rewardText}>{t.walkBoss.winReward(reward)}</Text>
-              <TouchableOpacity style={styles.continueButton} onPress={() => onWin(reward)} activeOpacity={0.8}>
-                <Text style={styles.continueButtonText}>{t.walkBoss.continueButton}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* Lose result — shop to heal + revive, or give up */}
-          {phase === 'lost' && (
-            <View style={styles.resultContainer}>
-              <Text style={styles.loseTitle}>{t.walkBoss.loseTitle}</Text>
-              <Text style={styles.loseMessage}>{t.walkBoss.loseMessage}</Text>
               <TouchableOpacity
-                style={styles.shopButton}
-                onPress={() => onShopPress({ bossHp: bossHpRef.current, bossMaxHp: bossMaxHpRef.current })}
+                style={styles.shopExitButton}
+                onPress={() => setPhase('lost')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.shopButtonText}>{t.walkBoss.shopButton}</Text>
+                <Text style={styles.shopExitButtonText}>{t.walkBoss.shopExitButton}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.giveUpButton} onPress={onGiveUp} activeOpacity={0.8}>
-                <Text style={styles.giveUpButtonText}>{t.walkBoss.giveUpButton}</Text>
-              </TouchableOpacity>
-            </View>
+            </ScrollView>
           )}
+
+          {/* ── Normal fight UI (hidden while shopping) ── */}
+          {phase !== 'shopping' && (
+            <>
+              {/* Header row with exit button */}
+              <View style={styles.headerRow}>
+                <View style={styles.headerText}>
+                  <Text style={styles.title}>{t.walkBoss.encounterTitle}</Text>
+                  <Text style={styles.subtitle}>{t.walkBoss.fightCount(fightCount)}</Text>
+                </View>
+                {(phase === 'idle' || phase === 'petAttacking' || phase === 'bossAttacking') && (
+                  <TouchableOpacity style={styles.exitButton} onPress={handleExitPress} activeOpacity={0.7}>
+                    <Text style={styles.exitButtonText}>{t.walkBoss.exitButton}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <HpBar
+                current={bossHp}
+                max={bossMaxHp}
+                label={t.walkBoss.bossHpLabel}
+                barColor={colors.error}
+              />
+
+              {/* VS image + damage flash numbers */}
+              <View style={styles.imageContainer}>
+                <Image source={frameSrc} style={styles.vsImage} resizeMode="contain" />
+                {bossDmgFlash != null && (
+                  <View style={styles.dmgBossContainer} pointerEvents="none">
+                    <Text style={styles.dmgBossText}>-{bossDmgFlash.toLocaleString()}</Text>
+                  </View>
+                )}
+                {petDmgFlash != null && (
+                  <View style={styles.dmgPetContainer} pointerEvents="none">
+                    <Text style={styles.dmgPetText}>-{petDmgFlash.toLocaleString()}</Text>
+                  </View>
+                )}
+              </View>
+
+              <HpBar
+                current={petHp}
+                max={petMaxHp}
+                label={t.walkBoss.petHpLabel(petName)}
+                barColor={colors.success}
+              />
+
+              {/* Attack button — only shown while fighting */}
+              {phase === 'idle' && (
+                <TouchableOpacity style={styles.attackButton} onPress={handleAttack} activeOpacity={0.75}>
+                  <Text style={styles.attackButtonText}>{t.walkBoss.attackButton}</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Win result */}
+              {phase === 'won' && (
+                <View style={styles.resultContainer}>
+                  <Text style={styles.winTitle}>{t.walkBoss.winTitle}</Text>
+                  <Text style={styles.rewardText}>{t.walkBoss.winReward(reward)}</Text>
+                  <TouchableOpacity style={styles.continueButton} onPress={() => onWin(reward)} activeOpacity={0.8}>
+                    <Text style={styles.continueButtonText}>{t.walkBoss.continueButton}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Lost — must buy food to revive or give up; cannot fight without condition */}
+              {phase === 'lost' && (
+                <View style={styles.resultContainer}>
+                  <Text style={styles.loseTitle}>{t.walkBoss.loseTitle}</Text>
+                  <Text style={styles.loseMessage}>{t.walkBoss.loseMessage}</Text>
+                  <TouchableOpacity
+                    style={styles.shopButton}
+                    onPress={() => setPhase('shopping')}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.shopButtonText}>{t.walkBoss.shopButton}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.giveUpButton} onPress={onGiveUp} activeOpacity={0.8}>
+                    <Text style={styles.giveUpButtonText}>{t.walkBoss.giveUpButton}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          )}
+
         </View>
       </View>
     </Modal>
@@ -463,4 +531,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   giveUpButtonText: { ...typography.bodyBold, color: 'rgba(255,255,255,0.6)' },
+
+  // ── Inline food shop ──
+  shopHeader: {
+    alignItems: 'center',
+    marginBottom: spacing.md,
+  },
+  shopTitle: {
+    ...typography.heading2,
+    color: '#FFD700',
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  shopSubtitle: {
+    ...typography.body,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    textAlign: 'center',
+    marginBottom: spacing.xs,
+  },
+  tokenBalance: {
+    ...typography.bodyBold,
+    color: colors.primaryContainer,
+    textAlign: 'center',
+  },
+  foodRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: radius.md,
+    padding: spacing.md,
+    marginBottom: spacing.sm,
+    gap: spacing.sm,
+  },
+  foodRowDisabled: {
+    opacity: 0.45,
+  },
+  foodEmoji: { fontSize: 28 },
+  foodInfo: { flex: 1 },
+  foodName: {
+    ...typography.bodyBold,
+    color: '#FFFFFF',
+  },
+  foodNameDisabled: {
+    color: 'rgba(255,255,255,0.5)',
+  },
+  foodStats: {
+    ...typography.caption,
+    color: 'rgba(255,255,255,0.6)',
+    marginTop: 2,
+  },
+  foodCost: {
+    ...typography.bodyBold,
+    color: '#FFD700',
+  },
+  foodCostDisabled: {
+    color: 'rgba(255,255,255,0.4)',
+  },
+  shopExitButton: {
+    marginTop: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  shopExitButtonText: {
+    ...typography.bodyBold,
+    color: 'rgba(255,255,255,0.6)',
+  },
 });

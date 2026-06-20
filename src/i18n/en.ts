@@ -18,6 +18,17 @@ export const en = {
     badgesTitle: 'Badges',
     badgePlaceholder: 'Coming soon',
     streakDayLabel: (day: string) => day,
+    badge_first_walk: 'First Walk',
+    badge_first_walk_desc: 'Complete your first walk',
+    badge_streak_7: '7-Day Streak',
+    badge_streak_7_desc: 'Walk 7 days in a row',
+    badge_streak_30: '30-Day Streak',
+    badge_streak_30_desc: 'Walk 30 days in a row',
+    badge_steps_100k: '100K Steps',
+    badge_steps_100k_desc: 'Walk 100,000 total steps',
+    badgeEarned: (n: number) => `+${n} tokens earned`,
+    badgeAchievedAt: (dateStr: string) => `Achieved ${dateStr}`,
+    badgeLocked: 'Not yet achieved',
   },
 
   // Profile screen
@@ -229,7 +240,10 @@ export const en = {
     winReward: (n: number) => `+${n} tokens earned!`,
     loseTitle: 'Your pet is exhausted!',
     loseMessage: 'Visit the shop to buy food and restore your pet.',
-    shopButton: 'Go to Shop',
+    shopButton: 'Buy Food to Revive',
+    shopTitle: 'Revive Your Pet',
+    shopSubtitle: 'Buy food to restore HP and continue the fight.',
+    shopExitButton: 'Not Now',
     continueButton: 'Continue Walk',
     giveUpButton: 'Give Up',
     exitButton: 'Exit',
@@ -238,6 +252,23 @@ export const en = {
     exitConfirmYes: 'Leave',
     exitConfirmNo: 'Stay',
     challengeBossButton: 'Challenge Boss',
+  },
+
+  // Badge earned celebration
+  badge: {
+    unlocked: 'Badge Unlocked!',
+    tokensEarned: (n: number) => `+${n} tokens earned!`,
+    celebrate: 'Amazing!',
+  },
+
+  // Pet stage-up celebration
+  stageUp: {
+    levelUp: 'Level Up!',
+    evolvedInto: (name: string, stage: string) => `${name} evolved into a ${stage}!`,
+    child: 'Keep walking — your pet is just getting started!',
+    adult: 'Incredible progress! Your dedication shines through every step.',
+    elder: 'Your pet has reached its final form. A true legend!',
+    celebrate: 'Awesome!',
   },
 
   // Common / shared

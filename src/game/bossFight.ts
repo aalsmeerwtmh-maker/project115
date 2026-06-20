@@ -6,13 +6,14 @@ export function calcPetHp(stamina: number): number {
 
 export function calcPetDmg(affection: number): number {
   const cfg = GAME_CONFIG.walkBossFight;
-  // Always clamp to [petDmgMin, petDmgMax] so even aff 0–20 deal petDmgMin.
-  // Only aff 100 produces petDmgMax (99 999 999), which slightly exceeds
-  // bossHpBase (99 000 000) → guaranteed 1-shot at max affection.
-  return Math.max(
+  const base = Math.max(
     cfg.petDmgMin,
     Math.min(cfg.petDmgMax, Math.floor((affection / 100) * cfg.petDmgMax)),
   );
+  const variance = Math.floor(base * cfg.dmgVarianceFraction);
+  // Roll is uniform in (-variance, +variance]
+  const roll = Math.floor((Math.random() * 2 - 1) * variance);
+  return Math.max(cfg.petDmgMin, Math.min(cfg.petDmgMax, base + roll));
 }
 
 export function calcBossHp(affection: number, fightCount: number): number {
@@ -27,9 +28,13 @@ export function calcBossHp(affection: number, fightCount: number): number {
   );
 }
 
-/** Boss deals 1/bossDmgPetHpFraction of the pet's max HP per hit. */
+/** Boss deals ~1/bossDmgPetHpFraction of the pet's max HP per hit, with ±variance. */
 export function calcBossDmg(petMaxHp: number): number {
-  return Math.floor(petMaxHp / GAME_CONFIG.walkBossFight.bossDmgPetHpFraction);
+  const cfg = GAME_CONFIG.walkBossFight;
+  const base = Math.floor(petMaxHp / cfg.bossDmgPetHpFraction);
+  const variance = Math.floor(base * cfg.dmgVarianceFraction);
+  const roll = Math.floor((Math.random() * 2 - 1) * variance);
+  return Math.max(1, base + roll);
 }
 
 export function calcReward(fightCount: number): number {

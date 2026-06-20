@@ -54,3 +54,10 @@ CREATE TABLE \`steps\` (
 	\`updated_at\` integer NOT NULL
 );
 `;
+
+export const m0001 = `CREATE TABLE \`badges\` (
+	\`id\` text PRIMARY KEY NOT NULL,
+	\`achieved_at\` integer,
+	\`reward_claimed\` integer DEFAULT false NOT NULL
+);
+`;

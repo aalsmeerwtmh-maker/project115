@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { View, Text, Image, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, Image, ImageBackground, StyleSheet, ScrollView, TouchableOpacity, type ImageSourcePropType } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -9,7 +9,8 @@ import { useStepStore } from '@/stores/stepStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useProgressStore, useFeedActive } from '@/stores/progressStore';
 import { useStepCounter } from '@/hooks/useStepCounter';
-import { PET_IMAGES } from '@/components/PetAvatar';
+import { PET_IMAGES, resolvePetStandImage } from '@/components/PetAvatar';
+import { useEquipmentStore } from '@/stores/equipmentStore';
 import { PetStateDisplay } from '@/components/PetStateDisplay';
 import { DailyCheckinModal } from './components/DailyCheckinModal';
 import { RenameModal } from './components/RenameModal';
@@ -23,6 +24,9 @@ import { spacing } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 import { GAME_CONFIG } from '@/game/config';
+import type { BadgeDef } from '@/game/config';
+import { markBadgeAchieved } from '@/db/repositories/badges';
+import { BadgeCelebrationModal } from '@/components/BadgeCelebrationModal';
 
 type HomeNav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -39,6 +43,11 @@ type PetSpecies = typeof PET_SPECIES[number];
 
 const SPECIES_LABEL: Record<PetSpecies, string> = { dog: 'Dog', cat: 'Cat', bird: 'Bird' };
 
+const BG_IMAGES: Record<string, ImageSourcePropType> = {
+  bg_park:        require('../../../assets/backgrounds/bg_park.png'),
+  bg_winter_park: require('../../../assets/backgrounds/bg_winter_park.png'),
+};
+
 export function HomeScreen() {
   const navigation = useNavigation<HomeNav>();
   const activePet = usePetStore((s) => s.activePet);
@@ -52,6 +61,19 @@ export function HomeScreen() {
   const setStreakCurrent = useProgressStore((s) => s.setStreakCurrent);
   const addTokens = useProgressStore((s) => s.addTokens);
   const feedActive = useFeedActive();
+  const equipped = useEquipmentStore((s) => s.equipped);
+
+  const hasHat  = equipped.includes('hat_cozy');
+  const hasSuit = equipped.includes('suit_formal');
+  const equippedBg = equipped.includes('bg_winter_park')
+    ? 'bg_winter_park'
+    : equipped.includes('bg_park')
+    ? 'bg_park'
+    : null;
+
+  const clothedPetImage = activePet
+    ? resolvePetStandImage(activePet.species, hasHat, hasSuit)
+    : null;
 
   const steps = today?.stepCount ?? 0;
   const goal = dailyGoal;
@@ -90,6 +112,7 @@ export function HomeScreen() {
   const [checkinVisible, setCheckinVisible] = useState(false);
   const [pendingStreak, setPendingStreak] = useState(0);
   const [pendingTokens, setPendingTokens] = useState(0);
+  const [earnedBadge, setEarnedBadge] = useState<{ def: BadgeDef; achievedAt: number } | null>(null);
 
   const [renameVisible, setRenameVisible] = useState(false);
   const [renameCount, setRenameCount] = useState(0);
@@ -132,6 +155,25 @@ export function HomeScreen() {
       } else {
         hapticReward();
       }
+      // Check streak badges after the new streak is committed.
+      const now = Date.now();
+      const badgeDefs = GAME_CONFIG.badges;
+      let justEarned: { def: BadgeDef; achievedAt: number } | null = null;
+      if (pendingStreak >= 30 && !justEarned) {
+        const newlyAchieved = await markBadgeAchieved('streak_30', now);
+        if (newlyAchieved) {
+          const def = badgeDefs.find((b) => b.id === 'streak_30');
+          if (def) { await addTokens(def.tokenReward); justEarned = { def, achievedAt: now }; }
+        }
+      }
+      if (pendingStreak >= 7 && !justEarned) {
+        const newlyAchieved = await markBadgeAchieved('streak_7', now);
+        if (newlyAchieved) {
+          const def = badgeDefs.find((b) => b.id === 'streak_7');
+          if (def) { await addTokens(def.tokenReward); justEarned = { def, achievedAt: now }; }
+        }
+      }
+      if (justEarned) setEarnedBadge(justEarned);
     } catch {
       // Non-fatal.
     }
@@ -149,9 +191,9 @@ export function HomeScreen() {
             accessibilityLabel="View profile"
           >
             <View style={styles.headerAvatar}>
-              {activePet && PET_IMAGES[activePet.species] ? (
+              {clothedPetImage ? (
                 <Image
-                  source={PET_IMAGES[activePet.species]}
+                  source={clothedPetImage}
                   style={styles.headerAvatarImage}
                   resizeMode="contain"
                   accessibilityIgnoresInvertColors
@@ -188,20 +230,43 @@ export function HomeScreen() {
         {/* Hero Section */}
         <View style={styles.heroSection}>
           <View style={styles.heroAvatarContainer}>
-            <View style={styles.heroAvatar}>
-              {activePet ? (
-                <PetStateDisplay
-                  species={activePet.species}
-                  displayMood={displayMood}
-                  size={240}
-                  showBadge={false}
-                />
-              ) : (
-                <View style={styles.heroAvatarEmpty}>
-                  <Text style={{ fontSize: 80 }}>🐾</Text>
-                </View>
-              )}
-            </View>
+            {equippedBg ? (
+              <ImageBackground
+                source={BG_IMAGES[equippedBg]!}
+                style={styles.heroAvatar}
+                imageStyle={{ borderRadius: 116 }}
+                resizeMode="cover"
+              >
+                {activePet ? (
+                  <PetStateDisplay
+                    species={activePet.species}
+                    displayMood={displayMood}
+                    size={240}
+                    showBadge={false}
+                  />
+                ) : (
+                  <View style={styles.heroAvatarEmpty}>
+                    <Text style={{ fontSize: 80 }}>🐾</Text>
+                  </View>
+                )}
+              </ImageBackground>
+            ) : (
+              <View style={styles.heroAvatar}>
+                {activePet ? (
+                  <PetStateDisplay
+                    species={activePet.species}
+                    displayMood={displayMood}
+                    size={240}
+                    showBadge={false}
+                  />
+                ) : (
+                  <View style={styles.heroAvatarEmpty}>
+                    <Text style={{ fontSize: 80 }}>🐾</Text>
+                  </View>
+                )}
+              </View>
+            )}
+
             <View style={styles.bestBuddyBadge}>
               <Text style={styles.bestBuddyText}>Best Buddy!</Text>
             </View>
@@ -234,7 +299,7 @@ export function HomeScreen() {
                   accessibilityState={{ selected: active }}
                 >
                   <Image
-                    source={PET_IMAGES[sp]}
+                    source={active && clothedPetImage ? clothedPetImage : PET_IMAGES[sp]!}
                     style={styles.pickerImage}
                     resizeMode="contain"
                     accessibilityIgnoresInvertColors
@@ -311,9 +376,9 @@ export function HomeScreen() {
             </View>
             <View style={styles.moodStatusContainer}>
               <View style={styles.moodEmojiCircle}>
-                {activePet && PET_IMAGES[activePet.species] ? (
+                {clothedPetImage ? (
                   <Image
-                    source={PET_IMAGES[activePet.species]}
+                    source={clothedPetImage}
                     style={{ width: 44, height: 44 }}
                     resizeMode="contain"
                     accessibilityIgnoresInvertColors
@@ -370,6 +435,13 @@ export function HomeScreen() {
         streakDay={pendingStreak}
         tokensEarned={pendingTokens}
         onClaim={handleClaim}
+      />
+
+      <BadgeCelebrationModal
+        visible={earnedBadge !== null}
+        badgeId={earnedBadge?.def.id ?? null}
+        achievedAt={earnedBadge?.achievedAt ?? 0}
+        onDismiss={() => setEarnedBadge(null)}
       />
     </SafeAreaView>
   );

@@ -1,3 +1,5 @@
+import { GAME_CONFIG } from './config';
+
 // Growth calibration:
 // At 8,000 steps/day with no streak and daily goal hit:
 //   food = floor(8000 / 500) = 16 units
@@ -51,4 +53,11 @@ export function growthToStage(totalGrowth: number): PetStage {
   if (totalGrowth < 50) return 'child';
   if (totalGrowth < 75) return 'adult';
   return 'elder';
+}
+
+export function timeToGrowth(durationSeconds: number): number {
+  const { growthPerMinuteWalking, minMinutesForGrowth } = GAME_CONFIG.petGrowth;
+  const minutes = durationSeconds / 60;
+  if (minutes < minMinutesForGrowth) return 0;
+  return Math.round(minutes * growthPerMinuteWalking * 100) / 100;
 }

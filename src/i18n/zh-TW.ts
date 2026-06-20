@@ -18,6 +18,17 @@ export const zhTW = {
     badgesTitle: '徽章',
     badgePlaceholder: '即將推出',
     streakDayLabel: (day: string) => day,
+    badge_first_walk: '第一次散步',
+    badge_first_walk_desc: '完成你的第一次散步',
+    badge_streak_7: '連續 7 天',
+    badge_streak_7_desc: '連續散步 7 天',
+    badge_streak_30: '連續 30 天',
+    badge_streak_30_desc: '連續散步 30 天',
+    badge_steps_100k: '10 萬步',
+    badge_steps_100k_desc: '累計步數達 100,000 步',
+    badgeEarned: (n: number) => `獲得 +${n} 代幣`,
+    badgeAchievedAt: (dateStr: string) => `達成於 ${dateStr}`,
+    badgeLocked: '尚未達成',
   },
 
   // Profile screen
@@ -228,7 +239,10 @@ export const zhTW = {
     winReward: (n: number) => `獲得 +${n} 代幣！`,
     loseTitle: '你的寵物精疲力竭了！',
     loseMessage: '前往商店購買食物，恢復寵物體力。',
-    shopButton: '前往商店',
+    shopButton: '購買食物復活寵物',
+    shopTitle: '復活你的寵物',
+    shopSubtitle: '購買食物恢復 HP，繼續戰鬥。',
+    shopExitButton: '暫不購買',
     continueButton: '繼續散步',
     giveUpButton: '放棄挑戰',
     exitButton: '離開',
@@ -237,6 +251,23 @@ export const zhTW = {
     exitConfirmYes: '離開',
     exitConfirmNo: '留下',
     challengeBossButton: '挑戰頭目',
+  },
+
+  // Badge earned celebration
+  badge: {
+    unlocked: '徽章解鎖！',
+    tokensEarned: (n: number) => `獲得 +${n} 代幣！`,
+    celebrate: '太厲害了！',
+  },
+
+  // Pet stage-up celebration
+  stageUp: {
+    levelUp: '等級提升！',
+    evolvedInto: (name: string, stage: string) => `${name} 進化為 ${stage}！`,
+    child: '繼續散步——你的寵物才剛起步！',
+    adult: '驚人的進步！你的努力在每一步中閃耀。',
+    elder: '你的寵物已達到最終形態。真正的傳說！',
+    celebrate: '太棒了！',
   },
 
   // Common / shared

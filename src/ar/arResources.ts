@@ -75,6 +75,53 @@ export const PET_AR_MODELS: Record<string, PetARMoodModels> = {
 // Animation registration
 // ---------------------------------------------------------------------------
 
+// Stand-pose GLBs for each clothing combination.
+// Walk / run / eat / sleep models reuse base until clothed animation GLBs arrive.
+const PET_AR_CLOTHES: Record<string, {
+  hat:      Src;
+  suit:     Src;
+  hat_suit: Src;
+}> = {
+  dog: {
+    hat:      require('../../assets/ar/models/pet_dog_hat_stand.glb'),
+    suit:     require('../../assets/ar/models/pet_dog_suit_stand.glb'),
+    hat_suit: require('../../assets/ar/models/pet_dog_hat_suit_stand.glb'),
+  },
+  cat: {
+    hat:      require('../../assets/ar/models/pet_cat_hat_stand.glb'),
+    suit:     require('../../assets/ar/models/pet_cat_suit_stand.glb'),
+    hat_suit: require('../../assets/ar/models/pet_cat_hat_suit_stand.glb'),
+  },
+  bird: {
+    hat:      require('../../assets/ar/models/pet_bird_hat_stand.glb'),
+    suit:     require('../../assets/ar/models/pet_bird_suit_stand.glb'),
+    hat_suit: require('../../assets/ar/models/pet_bird_hat_suit_stand.glb'),
+  },
+};
+
+/**
+ * Returns the AR model set for a species with the correct clothed stand model
+ * when hat or suit is equipped. Walk/excited/sleeping/eating animations fall
+ * back to base models until clothed animation GLBs are available.
+ */
+export function resolveARModels(
+  species: string,
+  hasHat: boolean,
+  hasSuit: boolean,
+): PetARMoodModels {
+  const base = PET_AR_MODELS[species] ?? PET_AR_MODELS.dog!;
+  if (!hasHat && !hasSuit) return base;
+
+  const clothes = PET_AR_CLOTHES[species] ?? PET_AR_CLOTHES.dog!;
+  const standModel = hasHat && hasSuit
+    ? clothes.hat_suit
+    : hasHat
+    ? clothes.hat
+    : clothes.suit;
+
+  return { ...base, stand: standModel, happy: [standModel] };
+}
+
 ViroAnimations.registerAnimations({
   // Gentle idle scale-pulse used on single-frame static poses (stand, sleep, eat).
   petIdlePulse: [

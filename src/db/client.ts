@@ -5,10 +5,11 @@ import type { ExpoSQLiteDatabase } from 'drizzle-orm/expo-sqlite';
 import * as schema from './schema';
 
 import journal from './drizzle/meta/_journal.json';
-import { m0000 } from './migrations';
+import { m0000, m0001 } from './migrations';
 
 const migrationFiles: Record<string, string> = {
   m0000,
+  m0001,
 };
 
 // Lazily initialized — opened inside initDb() so module evaluation never throws.

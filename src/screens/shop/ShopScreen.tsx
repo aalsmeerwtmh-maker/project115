@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProgressStore } from '@/stores/progressStore';
 import { usePetStore } from '@/stores/petStore';
+import { useEquipmentStore } from '@/stores/equipmentStore';
 import {
   getOwnedEquipment,
   purchaseEquipment,
@@ -106,6 +107,9 @@ export function ShopScreen() {
       await spendTokens(tokenCost);
       await purchaseEquipment(catalogId, 'token', generateId());
       await refreshOwned();
+      if (activePet) {
+        useEquipmentStore.getState().refresh(activePet.id).catch(() => {});
+      }
     } catch (err) {
       Alert.alert('Purchase failed', String(err));
     } finally {
@@ -118,10 +122,24 @@ export function ShopScreen() {
     const owned = ownedItems.find((e) => e.catalogId === catalogId);
     if (!owned) return;
 
+    const catalogItem = catalogItems.find((c) => c.id === catalogId);
+
     setLoadingItemId(catalogId);
     try {
+      // Background items: only one can be equipped at a time — unequip the other background first.
+      if (catalogItem?.category === 'background') {
+        for (const row of ownedItems) {
+          if (row.petId !== null && row.catalogId !== catalogId) {
+            const rowCatalog = catalogItems.find((c) => c.id === row.catalogId);
+            if (rowCatalog?.category === 'background') {
+              await unequipItem(row.id);
+            }
+          }
+        }
+      }
       await equipItem(owned.id, activePet.id);
       await refreshOwned();
+      useEquipmentStore.getState().refresh(activePet.id).catch(() => {});
     } finally {
       setLoadingItemId(null);
     }
@@ -135,6 +153,9 @@ export function ShopScreen() {
     try {
       await unequipItem(owned.id);
       await refreshOwned();
+      if (activePet) {
+        useEquipmentStore.getState().refresh(activePet.id).catch(() => {});
+      }
     } finally {
       setLoadingItemId(null);
     }

@@ -1,54 +1,93 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HomeScreen } from '@/screens/home/HomeScreen';
 import { WalksScreen } from '@/screens/walks/WalksScreen';
 import { GoalsScreen } from '@/screens/goals/GoalsScreen';
 import { ProfileScreen } from '@/screens/profile/ProfileScreen';
 import type { MainTabParamList } from './types';
 import { colors } from '@/theme/colors';
-import { spacing } from '@/theme/spacing';
+import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
+interface TabConfig {
+  icon: string;
+  label: string;
+}
+
+const TAB_CONFIG: Record<string, TabConfig> = {
+  Home:    { icon: '🏡', label: 'Home' },
+  Walks:   { icon: '🐾', label: 'Walks' },
+  Goals:   { icon: '🏆', label: 'Goals' },
+  Profile: { icon: '👤', label: 'Profile' },
+};
+
+function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.tabBar, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+      {/* Gold accent line along the top edge */}
+      <View style={styles.topAccent} />
+
+      <View style={styles.tabRow}>
+        {state.routes.map((route, index) => {
+          const isFocused = state.index === index;
+          const config = TAB_CONFIG[route.name] ?? { icon: '🐾', label: route.name };
+          const a11yLabel =
+            descriptors[route.key]?.options.tabBarAccessibilityLabel ?? config.label;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              onPress={onPress}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={a11yLabel}
+              style={styles.tabItem}
+              activeOpacity={0.7}
+            >
+              {/* Pill container — gold fill when active, transparent otherwise */}
+              <View style={[styles.pill, isFocused && styles.pillActive]}>
+                <Text style={[styles.tabIcon, !isFocused && styles.tabIconInactive]}>
+                  {config.icon}
+                </Text>
+                <Text
+                  style={[
+                    styles.tabLabel,
+                    isFocused ? styles.tabLabelActive : styles.tabLabelInactive,
+                  ]}
+                >
+                  {config.label}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 export function BottomTabs() {
   return (
     <Tab.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarShowLabel: true,
-        tabBarStyle: styles.tabBar,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarActiveTintColor: colors.onBackground,
-        tabBarInactiveTintColor: colors.outlineVariant,
-        tabBarButton: undefined, // default
-        tabBarIcon: ({ focused }) => {
-          let icon = '🐾';
-          if (route.name === 'Home') icon = '🏃';
-          else if (route.name === 'Walks') icon = '🐾';
-          else if (route.name === 'Goals') icon = '📊';
-          else if (route.name === 'Profile') icon = '👤';
-
-          return (
-            <View style={[styles.iconContainer, focused && styles.iconContainerActive]}>
-              <Text style={[styles.iconText, focused && styles.iconTextActive]}>{icon}</Text>
-            </View>
-          );
-        },
-        tabBarLabel: ({ focused, color }) => {
-          let label = route.name;
-          if (route.name === 'Home') label = 'Activity';
-          return (
-            <Text style={[
-              styles.tabBarLabel, 
-              { color }, 
-              focused && { fontWeight: '900', color: colors.onBackground }
-            ]}>
-              {label}
-            </Text>
-          );
-        }
-      })}
+      screenOptions={{ headerShown: false }}
+      tabBar={(props) => <CustomTabBar {...props} />}
     >
       <Tab.Screen
         name="Home"
@@ -76,45 +115,69 @@ export function BottomTabs() {
 
 const styles = StyleSheet.create({
   tabBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: 90,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 40,
-    borderTopRightRadius: 40,
-    borderTopWidth: 0,
-    paddingBottom: spacing.md,
-    paddingTop: spacing.xs,
-    // shadow
-    shadowColor: colors.onBackground,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 8,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    // Upward shadow
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    elevation: 16,
+    overflow: 'hidden',
   },
-  tabBarLabel: {
-    ...typography.labelSmall,
-    fontSize: 10,
-    marginTop: 4,
-  },
-  iconContainer: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 4,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  iconContainerActive: {
+  topAccent: {
+    height: 3,
     backgroundColor: colors.primaryContainer,
-    transform: [{ scale: 1.1 }],
+    marginHorizontal: spacing.xl,
+    borderBottomLeftRadius: 2,
+    borderBottomRightRadius: 2,
+    marginBottom: spacing.xs,
   },
-  iconText: {
-    fontSize: 20,
+  tabRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingTop: spacing.xs,
   },
-  iconTextActive: {
-    // any specific active styles
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pill: {
+    alignItems: 'center',
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+    width: '100%',
+    gap: 2,
+  },
+  pillActive: {
+    backgroundColor: colors.primaryContainer,
+    // Subtle inner glow via shadow
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  tabIcon: {
+    fontSize: 22,
+  },
+  tabIconInactive: {
+    opacity: 0.45,
+  },
+  tabLabel: {
+    ...typography.caption,
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  tabLabelActive: {
+    color: colors.onPrimaryContainer,
+    fontWeight: '800',
+  },
+  tabLabelInactive: {
+    color: colors.textSecondary,
+    fontWeight: '500',
   },
 });
-

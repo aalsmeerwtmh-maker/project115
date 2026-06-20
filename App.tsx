@@ -34,6 +34,7 @@ import { getProgress, setProgress } from '@/db/repositories/progress';
 import { usePetStore } from '@/stores/petStore';
 import { useProgressStore } from '@/stores/progressStore';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useEquipmentStore } from '@/stores/equipmentStore';
 import { initIAP, teardownIAP, setupPurchaseListeners } from '@/services/iap';
 import { scheduleDailyWalkReminder } from '@/services/notifications';
 import { OfflineBanner } from '@/components/OfflineBanner';
@@ -99,6 +100,7 @@ function App() {
   const hydratePet = usePetStore((s) => s.hydrate);
   const hydrateProgress = useProgressStore((s) => s.hydrate);
   const hydrateSettings = useSettingsStore((s) => s.hydrate);
+  const hydrateEquipment = useEquipmentStore((s) => s.hydrate);
 
   // 'loading' until bootstrap completes; then 'onboarding' or 'main'.
   const [initialRoute, setInitialRoute] = useState<'Onboarding' | 'Main' | null>(null);
@@ -107,6 +109,10 @@ function App() {
     async function bootstrap() {
       await initDb();
       await Promise.all([hydratePet(), hydrateProgress(), hydrateSettings()]);
+      const activePet = usePetStore.getState().activePet;
+      if (activePet) {
+        await hydrateEquipment(activePet.id).catch(() => {});
+      }
 
       // Detect whether onboarding has been completed.
       const onboardingComplete = await getProgress<boolean>('onboarding_complete');
@@ -136,7 +142,7 @@ function App() {
         }
       }
     });
-  }, [hydratePet, hydrateProgress, hydrateSettings]);
+  }, [hydratePet, hydrateProgress, hydrateSettings, hydrateEquipment]);
 
   useEffect(() => {
     let cleanupListeners: (() => void) | null = null;

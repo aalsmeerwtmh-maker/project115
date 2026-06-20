@@ -19,7 +19,7 @@ export interface BossDefinition {
 export interface EquipmentItem {
   id: string;
   name: string;
-  category: 'hat' | 'accessory' | 'background';
+  category: 'hat' | 'suit' | 'accessory' | 'background';
   tokenCost: number;
   iapProductId: string | null;
   assetKey: string;
@@ -66,6 +66,21 @@ export interface WalkBossFightConfig {
   bossStaminaCost: number;
   rewardBase: number;
   rewardPerFight: number;
+  /** Fraction of base damage applied as ±random variance each hit (0.25 = ±25%). */
+  dmgVarianceFraction: number;
+}
+
+export interface BadgeDef {
+  id: 'first_walk' | 'streak_7' | 'streak_30' | 'steps_100k';
+  emoji: string;
+  tokenReward: number;
+}
+
+export interface PetGrowthConfig {
+  /** Growth points earned per minute of active walk session. */
+  growthPerMinuteWalking: number;
+  /** Minimum walk duration (minutes) before any growth is awarded. */
+  minMinutesForGrowth: number;
 }
 
 export interface ARConfig {
@@ -92,6 +107,7 @@ export interface ARConfig {
 }
 
 export interface GameConfig {
+  badges: BadgeDef[];
   bosses: BossDefinition[];
   walkBossFight: WalkBossFightConfig;
   equipment: EquipmentItem[];
@@ -100,6 +116,7 @@ export interface GameConfig {
   tokenEarnRates: TokenEarnRates;
   walkEvents: WalkEvents;
   ar: ARConfig;
+  petGrowth: PetGrowthConfig;
   /** Step count thresholds that control the home-screen pet animation tier. */
   petAnimationStepThresholds: {
     excited: number; // steps ≥ this → excited wiggle
@@ -113,6 +130,13 @@ export interface GameConfig {
 }
 
 export const GAME_CONFIG: GameConfig = {
+  badges: [
+    { id: 'first_walk',  emoji: '👟', tokenReward: 30  },
+    { id: 'streak_7',   emoji: '🔥', tokenReward: 100 },
+    { id: 'streak_30',  emoji: '🏆', tokenReward: 500 },
+    { id: 'steps_100k', emoji: '💯', tokenReward: 200 },
+  ],
+
   walkBossFight: {
     stepTrigger: 200,
     timeTriggerSecs: 300,
@@ -131,6 +155,7 @@ export const GAME_CONFIG: GameConfig = {
     bossStaminaCost: 5,
     rewardBase: 20,
     rewardPerFight: 10,
+    dmgVarianceFraction: 0.25,
   },
 
   tokenEarnRates: {
@@ -235,60 +260,36 @@ export const GAME_CONFIG: GameConfig = {
 
   equipment: [
     {
-      id: 'hat_beanie',
-      name: 'Cozy Beanie',
+      id: 'hat_cozy',
+      name: 'Cozy Hat',
       category: 'hat',
-      tokenCost: 50,
+      tokenCost: 80,
       iapProductId: null,
-      assetKey: 'hat_beanie',
+      assetKey: 'hat_cozy',
     },
     {
-      id: 'hat_crown',
-      name: 'Tiny Crown',
-      category: 'hat',
-      tokenCost: 120,
-      iapProductId: null,
-      assetKey: 'hat_crown',
-    },
-    {
-      id: 'hat_tophat',
-      name: 'Dapper Top Hat',
-      category: 'hat',
-      tokenCost: 200,
-      iapProductId: 'pawstep.item.tophat',
-      assetKey: 'hat_tophat',
-    },
-    {
-      id: 'acc_bowtie',
-      name: 'Fancy Bow-Tie',
-      category: 'accessory',
-      tokenCost: 75,
-      iapProductId: null,
-      assetKey: 'acc_bowtie',
-    },
-    {
-      id: 'acc_scarf',
-      name: 'Winter Scarf',
-      category: 'accessory',
-      tokenCost: 100,
-      iapProductId: null,
-      assetKey: 'acc_scarf',
-    },
-    {
-      id: 'bg_forest',
-      name: 'Enchanted Forest',
-      category: 'background',
+      id: 'suit_formal',
+      name: 'Suit',
+      category: 'suit',
       tokenCost: 150,
       iapProductId: null,
-      assetKey: 'bg_forest',
+      assetKey: 'suit_formal',
     },
     {
-      id: 'bg_citynight',
-      name: 'City at Night',
+      id: 'bg_park',
+      name: 'Park Background',
       category: 'background',
-      tokenCost: 400,
-      iapProductId: 'pawstep.item.citynight',
-      assetKey: 'bg_citynight',
+      tokenCost: 100,
+      iapProductId: null,
+      assetKey: 'bg_park',
+    },
+    {
+      id: 'bg_winter_park',
+      name: 'Winter Park Background',
+      category: 'background',
+      tokenCost: 120,
+      iapProductId: null,
+      assetKey: 'bg_winter_park',
     },
   ],
 
@@ -330,6 +331,11 @@ export const GAME_CONFIG: GameConfig = {
     petArriveDistanceM: 0.5,
     petWalkStepM: 0.025,
     petWalkStepIntervalMs: 50,
+  },
+
+  petGrowth: {
+    growthPerMinuteWalking: 0.1,
+    minMinutesForGrowth: 2,
   },
 
   petAnimationStepThresholds: {

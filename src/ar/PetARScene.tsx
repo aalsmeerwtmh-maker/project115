@@ -23,7 +23,9 @@ import {
 } from '@reactvision/react-viro';
 import type { ViroCameraARHitTest, ViroARHitTestResult } from '@reactvision/react-viro';
 
-import { PET_AR_MODELS, IDLE_ANIMATION_NAME, HIT_TEST_PRIORITY } from './arResources';
+import { resolveARModels, IDLE_ANIMATION_NAME, HIT_TEST_PRIORITY } from './arResources';
+import type { PetARMoodModels } from './arResources';
+import { useEquipmentStore } from '@/stores/equipmentStore';
 import { GAME_CONFIG } from '@/game/config';
 import type { DisplayMood } from '@/game/petMood';
 
@@ -106,9 +108,8 @@ function pickBest(results: ViroARHitTestResult[], cam: Vec3): ViroARHitTestResul
   return null;
 }
 
-/** Returns the ordered list of GLB sources for the given species + mood. */
-function getMoodFrames(species: string, mood: DisplayMood): Src[] {
-  const m = PET_AR_MODELS[species] ?? PET_AR_MODELS.dog;
+/** Returns the ordered list of GLB sources for the given model set + mood. */
+function getMoodFrames(m: PetARMoodModels, mood: DisplayMood): Src[] {
   switch (mood) {
     case 'sleeping': return [m.sleeping];
     case 'eating':   return [m.eating];
@@ -144,6 +145,12 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
   const { initialSpecies = 'dog', initialMood = 'normal' } = sceneNavigator.viroAppProps ?? {};
   const [species,  setSpecies]  = useState(initialSpecies);
   const [baseMood, setBaseMood] = useState<DisplayMood>(initialMood);
+
+  // ---------- Equipment (hat / suit) ----------
+  const equipped = useEquipmentStore((s) => s.equipped);
+  const hasHat  = equipped.includes('hat_cozy');
+  const hasSuit = equipped.includes('suit_formal');
+  const arModels = resolveARModels(species, hasHat, hasSuit);
 
   // Register callback so ARWalkScreen can push updates into this scene.
   useEffect(() => {
@@ -196,7 +203,7 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
 
   useEffect(() => {
     setArFrame(0);
-    const frames = getMoodFrames(species, arMood);
+    const frames = getMoodFrames(arModels, arMood);
     if (frames.length <= 1) return;
     const id = setInterval(
       () => setArFrame(f => (f + 1) % frames.length),
@@ -255,7 +262,7 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
 
   // ---------- Render ----------
 
-  const frames = getMoodFrames(species, arMood);
+  const frames = getMoodFrames(arModels, arMood);
   const isStatic = frames.length === 1;
 
   return (

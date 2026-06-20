@@ -54,6 +54,13 @@ export const events = sqliteTable(
   (table) => [index('idx_events_type_time').on(table.type, table.triggeredAt)],
 );
 
+// Achievement badges. One row per badge ID once earned; absent = not yet achieved.
+export const badges = sqliteTable('badges', {
+  id: text('id').primaryKey(),
+  achievedAt: integer('achieved_at'),
+  rewardClaimed: integer('reward_claimed', { mode: 'boolean' }).notNull().default(false),
+});
+
 // Equipment and cosmetics owned by the user.
 // petId is null when the item is in inventory (not equipped on any pet).
 export const equipment = sqliteTable(
@@ -70,6 +77,8 @@ export const equipment = sqliteTable(
 );
 
 // Convenience type exports — use these in repository functions and stores
+export type Badge = typeof badges.$inferSelect;
+export type NewBadge = typeof badges.$inferInsert;
 export type Pet = typeof pets.$inferSelect;
 export type NewPet = typeof pets.$inferInsert;
 export type StepDay = typeof steps.$inferSelect;

@@ -9,6 +9,7 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
+import { useEquipmentStore } from '@/stores/equipmentStore';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
 
@@ -94,8 +95,49 @@ export const PET_STATE_IMAGES: Record<
   },
 };
 
+// Clothes stand-pose variants — art director replaces placeholder PNGs in assets/clothes/
+const CLOTHES_STAND_IMAGES: Record<string, {
+  hat:     ImageSourcePropType;
+  suit:    ImageSourcePropType;
+  hat_suit: ImageSourcePropType;
+}> = {
+  dog: {
+    hat:      require('../../assets/clothes/pet_dog_hat.png'),
+    suit:     require('../../assets/clothes/pet_dog_suit.png'),
+    hat_suit: require('../../assets/clothes/pet_dog_hat_suit.png'),
+  },
+  cat: {
+    hat:      require('../../assets/clothes/pet_cat_hat.png'),
+    suit:     require('../../assets/clothes/pet_cat_suit.png'),
+    hat_suit: require('../../assets/clothes/pet_cat_hat_suit.png'),
+  },
+  bird: {
+    hat:      require('../../assets/clothes/pet_bird_hat.png'),
+    suit:     require('../../assets/clothes/pet_bird_suit.png'),
+    hat_suit: require('../../assets/clothes/pet_bird_hat_suit.png'),
+  },
+};
+
+export function resolvePetStandImage(
+  species: string,
+  hasHat: boolean,
+  hasSuit: boolean,
+): ImageSourcePropType {
+  const base = PET_IMAGES[species] ?? PET_IMAGES.dog!;
+  if (!hasHat && !hasSuit) return base;
+  const clothes = CLOTHES_STAND_IMAGES[species] ?? CLOTHES_STAND_IMAGES.dog!;
+  if (hasHat && hasSuit) return clothes.hat_suit;
+  if (hasHat) return clothes.hat;
+  return clothes.suit;
+}
+
 export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAvatarProps) {
-  const imageSource = PET_IMAGES[species];
+  const equipped = useEquipmentStore((s) => s.equipped);
+  const imageSource = resolvePetStandImage(
+    species,
+    equipped.includes('hat_cozy'),
+    equipped.includes('suit_formal'),
+  );
   const imageSize = size * 0.85;
 
   const translateY = useSharedValue(0);

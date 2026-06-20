@@ -9,7 +9,8 @@ import Animated, {
   withSequence,
   withTiming,
 } from 'react-native-reanimated';
-import { PET_STATE_IMAGES } from '@/components/PetAvatar';
+import { PET_STATE_IMAGES, resolvePetStandImage } from '@/components/PetAvatar';
+import { useEquipmentStore } from '@/stores/equipmentStore';
 import type { DisplayMood } from '@/game/petMood';
 import { colors } from '@/theme/colors';
 import { typography } from '@/theme/typography';
@@ -43,7 +44,10 @@ export function PetStateDisplay({
   size = 180,
   showBadge = true,
 }: PetStateDisplayProps) {
-  const si = PET_STATE_IMAGES[species] ?? PET_STATE_IMAGES.dog;
+  const si = (PET_STATE_IMAGES[species] ?? PET_STATE_IMAGES['dog'])!;
+  const equipped = useEquipmentStore((s) => s.equipped);
+  const hasHat  = equipped.includes('hat_cozy');
+  const hasSuit = equipped.includes('suit_formal');
   const imageSize = size * 0.85;
 
   // Frame indices for multi-frame states
@@ -192,15 +196,18 @@ export function PetStateDisplay({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [displayMood]);
 
-  // Pick the correct image for the current mood + frame
+  // Pick the correct image for the current mood + frame.
+  // Stand-based moods (normal, sad, happy) use clothed variant when hat/suit is equipped;
+  // animation-frame moods (walking, excited, sleeping, eating) use base frames until
+  // the art director delivers clothed animation sheets.
   let imageSource: ImageSourcePropType;
   switch (displayMood) {
-    case 'sleeping': imageSource = si.sleeping;             break;
-    case 'eating':   imageSource = si.eating;               break;
-    case 'walking':  imageSource = si.walk[walkFrame];      break;
-    case 'excited':  imageSource = si.excited[excitedFrame];break;
-    case 'happy':    imageSource = si.happy;                break;
-    default:         imageSource = si.stand;                break; // normal, sad
+    case 'sleeping': imageSource = si.sleeping;                                      break;
+    case 'eating':   imageSource = si.eating;                                        break;
+    case 'walking':  imageSource = si.walk[walkFrame as 0 | 1 | 2]!;               break;
+    case 'excited':  imageSource = si.excited[excitedFrame as 0 | 1 | 2]!;         break;
+    case 'happy':    imageSource = resolvePetStandImage(species, hasHat, hasSuit); break;
+    default:         imageSource = resolvePetStandImage(species, hasHat, hasSuit); break;
   }
 
   return (

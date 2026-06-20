@@ -2,10 +2,11 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, FlatList, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapView, { Polyline } from 'react-native-maps';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '@/navigation/types';
 import { useWalkSession, formatElapsed } from '@/hooks/useWalkSession';
+import type { WalkSessionStats } from '@/hooks/useWalkSession';
 import { useStepStore } from '@/stores/stepStore';
 import { usePetStore } from '@/stores/petStore';
 import { useProgressStore } from '@/stores/progressStore';
@@ -17,7 +18,9 @@ import { PrimaryButton } from '@/components/PrimaryButton';
 import { DiscoveryToast } from '@/components/DiscoveryToast';
 import { WalkEventModal } from './components/WalkEventModal';
 import { BossChallengeModal } from './components/BossChallengeModal';
-import type { BossFightSnapshot } from './components/BossChallengeModal';
+import { StageUpModal } from './components/StageUpModal';
+import { BadgeCelebrationModal } from '@/components/BadgeCelebrationModal';
+import type { BadgeDef } from '@/game/config';
 import { EmptyState } from '@/components/EmptyState';
 import { ErrorState } from '@/components/ErrorState';
 import { colors } from '@/theme/colors';
@@ -25,6 +28,9 @@ import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 import { GAME_CONFIG } from '@/game/config';
+import { timeToGrowth, growthToStage } from '@/game/growthFormula';
+import { markBadgeAchieved } from '@/db/repositories/badges';
+import { getTotalStepCount } from '@/db/repositories/steps';
 
 type RootNav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -61,18 +67,18 @@ export function WalksScreen() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastTokens, setToastTokens] = useState(0);
   const [walkEventDialogue, setWalkEventDialogue] = useState<string | null>(null);
-  const [bossVisible, setBossVisible]       = useState(false);
-  const [fightCount, setFightCount]         = useState(0);
-  // Continuation state — preserved when the user goes to Shop mid-fight.
-  const [continueBossHp, setContinueBossHp]       = useState<number | undefined>(undefined);
-  const [continueBossMaxHp, setContinueBossMaxHp] = useState<number | undefined>(undefined);
-  const [continuePetHp, setContinuePetHp]         = useState<number | undefined>(undefined);
-  const sessionIdRef       = useRef<string>('');
-  const bossStepTierRef    = useRef(0);
-  const bossTimeTierRef    = useRef(0);
-  // Saved when navigating to Shop so we know how much HP the food restored.
-  const bossResumeRef       = useRef<BossFightSnapshot | null>(null);
-  const staminaBeforeShopRef = useRef(activePet?.stamina ?? 20);
+  const [bossVisible, setBossVisible] = useState(false);
+  const [fightCount, setFightCount]   = useState(0);
+  const [stageUpStage, setStageUpStage] = useState<'child' | 'adult' | 'elder' | null>(null);
+  const [earnedBadge, setEarnedBadge] = useState<{ def: BadgeDef; achievedAt: number } | null>(null);
+  const sessionIdRef      = useRef<string>('');
+  const bossStepTierRef   = useRef(0);
+  const bossTimeTierRef   = useRef(0);
+  // Queued boss trigger: set to true when a walk event is showing and a boss would have fired.
+  const pendingBossRef    = useRef(false);
+  // Ref mirror of walkEventDialogue so the boss-trigger effect avoids stale closures.
+  const walkEventRef      = useRef<string | null>(null);
+  walkEventRef.current    = walkEventDialogue;
 
   const handleNewCell = useCallback((tokensAwarded: number) => {
     setToastTokens(tokensAwarded);
@@ -119,43 +125,93 @@ export function WalksScreen() {
     void getProgress<number>('boss_fight_count').then(n => setFightCount(n ?? 0));
   }, []);
 
-  // When returning from the Shop screen, resume the fight with healed pet HP.
-  useFocusEffect(useCallback(() => {
-    const resume = bossResumeRef.current;
-    if (resume === null) return;
-    bossResumeRef.current = null;  // consume once
-    const oldStamina = staminaBeforeShopRef.current;
-    const newStamina = activePet?.stamina ?? 20;
-    // HP restored = increase in max-HP (food raises stamina → raises max HP).
-    const healedHp = Math.max(0, (newStamina - oldStamina) * 100);
-    setContinueBossHp(resume.bossHp);
-    setContinueBossMaxHp(resume.bossMaxHp);
-    setContinuePetHp(Math.max(1, healedHp));
-    setBossVisible(true);
-  }, [activePet?.stamina]));
-
-  // Auto-trigger boss every 200 steps or 5 minutes during an active walk
+  // Auto-trigger boss every 200 steps or 5 minutes during an active walk.
+  // The "Something Happened" walk-event window always appears first; boss fires after "Got it".
   useEffect(() => {
-    if (!isActive || bossVisible) return;
+    if (!isActive) return;
     const cfg = GAME_CONFIG.walkBossFight;
     const stepTier = Math.floor(currentSteps / cfg.stepTrigger);
     const timeTier = Math.floor(elapsedSeconds / cfg.timeTriggerSecs);
+
+    // While a boss fight is in progress, silently advance the tier refs so that finishing
+    // the fight never immediately re-triggers the boss due to accumulated time/steps.
+    if (bossVisible) {
+      bossStepTierRef.current = Math.max(bossStepTierRef.current, stepTier);
+      bossTimeTierRef.current = Math.max(bossTimeTierRef.current, timeTier);
+      return;
+    }
+
+    let shouldTrigger = false;
     if (stepTier > 0 && stepTier > bossStepTierRef.current) {
       bossStepTierRef.current = stepTier;
       bossTimeTierRef.current = timeTier;
-      handleShowBossChallenge();
+      shouldTrigger = true;
     } else if (timeTier > 0 && timeTier > bossTimeTierRef.current) {
       bossTimeTierRef.current = timeTier;
       bossStepTierRef.current = stepTier;
-      handleShowBossChallenge();
+      shouldTrigger = true;
+    }
+    if (!shouldTrigger) return;
+
+    // Always show the "Something Happened" walk-event window before the boss.
+    // Queue the boss; it fires in handleWalkEventDismiss after the player taps "Got it".
+    pendingBossRef.current = true;
+    if (walkEventRef.current === null) {
+      const dialogues = GAME_CONFIG.walkEvents.dialogues;
+      const dialogue = dialogues[Math.floor(Math.random() * dialogues.length)] ?? dialogues[0] ?? '';
+      setWalkEventDialogue(dialogue);
     }
   }, [currentSteps, elapsedSeconds, isActive, bossVisible]);
+
+  async function applyWalkGrowth(stats: WalkSessionStats) {
+    const pet = activePet;
+    if (!pet) return;
+    const gain = timeToGrowth(stats.durationSeconds);
+    if (gain === 0) return;
+    const oldGrowth = pet.growthValue ?? 0;
+    const newGrowth = oldGrowth + gain;
+    const oldStage = growthToStage(oldGrowth);
+    const newStage = growthToStage(newGrowth);
+    await updateActivePet({ growthValue: newGrowth, stage: newStage });
+    if (newStage !== oldStage && newStage !== 'baby') {
+      setStageUpStage(newStage);
+    }
+  }
+
+  async function checkWalkBadges() {
+    const now = Date.now();
+    const badgeDefs = GAME_CONFIG.badges;
+
+    const firstWalkNew = await markBadgeAchieved('first_walk', now);
+    if (firstWalkNew) {
+      const def = badgeDefs.find((b) => b.id === 'first_walk');
+      if (def) {
+        await addTokens(def.tokenReward);
+        setEarnedBadge({ def, achievedAt: now });
+        return;
+      }
+    }
+
+    const totalSteps = await getTotalStepCount();
+    if (totalSteps >= 100_000) {
+      const stepsNew = await markBadgeAchieved('steps_100k', now);
+      if (stepsNew) {
+        const def = badgeDefs.find((b) => b.id === 'steps_100k');
+        if (def) {
+          await addTokens(def.tokenReward);
+          setEarnedBadge({ def, achievedAt: now });
+        }
+      }
+    }
+  }
 
   async function handleStartStop() {
     if (isActive) {
       setIsStopping(true);
-      await session.stop(liveSteps);
+      const stats = await session.stop(liveSteps);
       setIsStopping(false);
+      await applyWalkGrowth(stats);
+      await checkWalkBadges();
     } else {
       sessionIdRef.current = String(Date.now());
       await session.start(liveSteps);
@@ -163,10 +219,6 @@ export function WalksScreen() {
   }
 
   async function handleBossWin(tokensEarned: number) {
-    // Clear any leftover continuation state from a previous Shop visit.
-    setContinueBossHp(undefined);
-    setContinueBossMaxHp(undefined);
-    setContinuePetHp(undefined);
     const next = fightCount + 1;
     setFightCount(next);
     await setProgress('boss_fight_count', next);
@@ -175,10 +227,6 @@ export function WalksScreen() {
   }
 
   async function handleBossGiveUp() {
-    // Clear continuation state — fight is abandoned, starts fresh next time.
-    setContinueBossHp(undefined);
-    setContinueBossMaxHp(undefined);
-    setContinuePetHp(undefined);
     const next = fightCount + 1;
     setFightCount(next);
     await setProgress('boss_fight_count', next);
@@ -186,7 +234,6 @@ export function WalksScreen() {
   }
 
   function handleShowBossChallenge() {
-    // Drain stamina each time a new boss encounter starts (floored at 20).
     const pet = activePet;
     if (pet) {
       const newStamina = Math.max(20, pet.stamina - GAME_CONFIG.walkBossFight.bossStaminaCost);
@@ -197,12 +244,12 @@ export function WalksScreen() {
     setBossVisible(true);
   }
 
-  function handleBossShop(snapshot: BossFightSnapshot) {
-    // Save the current boss HP so the fight can resume after the user returns.
-    bossResumeRef.current = snapshot;
-    staminaBeforeShopRef.current = activePet?.stamina ?? 20;
-    setBossVisible(false);
-    navigation.navigate('Shop');
+  function handleWalkEventDismiss() {
+    setWalkEventDialogue(null);
+    if (pendingBossRef.current) {
+      pendingBossRef.current = false;
+      handleShowBossChallenge();
+    }
   }
 
   function handleEnterAR() {
@@ -316,7 +363,7 @@ export function WalksScreen() {
       <WalkEventModal
         visible={walkEventDialogue !== null}
         dialogue={walkEventDialogue ?? ''}
-        onDismiss={() => setWalkEventDialogue(null)}
+        onDismiss={handleWalkEventDismiss}
       />
 
       {/* Boss challenge modal — triggered by steps/time or manually */}
@@ -327,12 +374,24 @@ export function WalksScreen() {
         stamina={activePet?.stamina ?? 20}
         affection={activePet?.affection ?? 0}
         fightCount={fightCount}
-        continueBossHp={continueBossHp}
-        continueBossMaxHp={continueBossMaxHp}
-        continuePetHp={continuePetHp}
         onWin={(tokens) => { void handleBossWin(tokens); }}
         onGiveUp={() => { void handleBossGiveUp(); }}
-        onShopPress={handleBossShop}
+      />
+
+      {/* Pet stage-up celebration — shown when pet evolves after a walk */}
+      <StageUpModal
+        visible={stageUpStage !== null}
+        newStage={stageUpStage ?? 'child'}
+        petName={activePet?.name ?? ''}
+        onDismiss={() => setStageUpStage(null)}
+      />
+
+      {/* Badge earned celebration */}
+      <BadgeCelebrationModal
+        visible={earnedBadge !== null}
+        badgeId={earnedBadge?.def.id ?? null}
+        achievedAt={earnedBadge?.achievedAt ?? 0}
+        onDismiss={() => setEarnedBadge(null)}
       />
     </SafeAreaView>
   );

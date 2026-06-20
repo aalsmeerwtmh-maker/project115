@@ -54,6 +54,12 @@ function pickRandomDialogue(): string {
   return dialogues[idx] ?? dialogues[0] ?? '';
 }
 
+export interface WalkSessionStats {
+  durationSeconds: number;
+  distanceM: number;
+  stepCount: number;
+}
+
 export interface UseWalkSessionReturn {
   isActive: boolean;
   elapsedSeconds: number;
@@ -62,7 +68,7 @@ export interface UseWalkSessionReturn {
   polyline: Coords[];
   locationPermissionStatus: 'undetermined' | 'granted' | 'denied';
   start: (stepBaseline: number) => Promise<void>;
-  stop: (liveStepCount: number) => Promise<void>;
+  stop: (liveStepCount: number) => Promise<WalkSessionStats>;
   notifySteps: (liveStepCount: number) => void;
   /** Called each time the user enters a new geofence cell, with the tokens awarded. */
   onNewCell?: (tokensAwarded: number) => void;
@@ -187,7 +193,7 @@ export function useWalkSession(options?: UseWalkSessionOptions): UseWalkSessionR
   );
 
   const stop = useCallback(
-    async (liveStepCount: number) => {
+    async (liveStepCount: number): Promise<WalkSessionStats> => {
       stopTracking();
 
       if (timerRef.current) {
@@ -227,6 +233,7 @@ export function useWalkSession(options?: UseWalkSessionOptions): UseWalkSessionR
       }
 
       setIsActive(false);
+      return { durationSeconds, distanceM: distFinal, stepCount: steps };
     },
     [stopTracking],
   );

@@ -19,7 +19,6 @@ import {
   ViroDirectionalLight,
   ViroNode,
   Viro3DObject,
-  ViroTrackingStateConstants,
 } from '@reactvision/react-viro';
 import type { ViroCameraARHitTest, ViroARHitTestResult } from '@reactvision/react-viro';
 
@@ -41,6 +40,7 @@ type PlacementState = { status: 'scanning' } | { status: 'ready' } | { status: '
 
 type ViroAppProps = {
   onPlacementStateChanged?: (status: PlacementStatus) => void;
+  onPetLoaded?: () => void;
   registerTapHandler?: (fn: () => void) => void;
   registerSceneUpdate?: (fn: (species: string, mood: DisplayMood) => void) => void;
   initialSpecies?: string;
@@ -219,9 +219,17 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
     cameraRef.current = cam;
 
     if (placementRef.current.status !== 'placed') {
-      // Pre-placement: cache best surface hit for the tap handler.
+      // Pre-placement: cache the best surface hit AND reflect real surface
+      // availability in the placement state. "Tap to place" (and the tap target)
+      // must only appear once a tap will actually land the pet — not merely once
+      // tracking initialises, which happens seconds before a surface is found.
       const best = pickBest(event.hitTestResults, cam);
       if (best) latestHitRef.current = best;
+      const desired: PlacementStatus = best ? 'ready' : 'scanning';
+      if (placementRef.current.status !== desired) {
+        setPlacement(best ? { status: 'ready' } : { status: 'scanning' });
+        sceneNavigator.viroAppProps?.onPlacementStateChanged?.(desired);
+      }
     } else {
       // Post-placement: start following if the user has walked too far.
       const dist = xzDist(petPosRef.current, cam);
@@ -229,18 +237,6 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
         isFollowingRef.current = true;
         setIsFollowing(true);
       }
-    }
-  }
-
-  // ---------- Tracking ----------
-
-  function handleTrackingUpdated(state: number) {
-    if (
-      placementRef.current.status === 'scanning' &&
-      state >= ViroTrackingStateConstants.TRACKING_LIMITED
-    ) {
-      setPlacement({ status: 'ready' });
-      sceneNavigator.viroAppProps?.onPlacementStateChanged?.('ready');
     }
   }
 
@@ -269,7 +265,6 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
     <ViroARScene
       ref={arSceneRef}
       anchorDetectionTypes={placement.status !== 'placed' ? ['planesHorizontal'] : []}
-      onTrackingUpdated={handleTrackingUpdated}
       onCameraARHitTest={handleCameraHitTest}
     >
       <ViroAmbientLight color="#FFFFFF" intensity={200} />
@@ -290,6 +285,9 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
               position={[0, 0, 0]}
               scale={isStatic ? PET_SCALE_STATIC : PET_SCALE_ANIMATED}
               type="GLB"
+              // Notify the screen when the first-shown frame is actually on screen so
+              // the "Placing…" indicator clears only once the pet is really visible.
+              onLoadEnd={i === 0 ? () => sceneNavigator.viroAppProps?.onPetLoaded?.() : undefined}
               // Idle pulse only on static single-frame moods; animated moods use frame cycling.
               animation={{ name: IDLE_ANIMATION_NAME, loop: true, run: isStatic }}
             />

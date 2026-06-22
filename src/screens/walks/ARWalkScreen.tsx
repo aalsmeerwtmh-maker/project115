@@ -133,8 +133,12 @@ export function ARWalkScreen() {
   // Placement status driven by PetARScene via onPlacementStateChanged callback.
   const [placementStatus, setPlacementStatus] = useState<PlacementStatus>('scanning');
 
-  // Timer that transitions 'placing' → 'placed' after the ViroNode has had time to render.
+  // Timer that transitions 'placing' → 'placed'. Normally fired by the pet GLB's
+  // onLoadEnd (see handlePetLoaded); the timeout below is only a safety fallback.
   const placingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // When the 'placing' state began — used to keep "Placing…" visible for at least
+  // placingFeedbackMs so a fast (cached) model load doesn't flash the state by.
+  const placingStartRef = useRef(0);
 
   function clearPlacingTimer() {
     if (placingTimerRef.current !== null) {
@@ -147,11 +151,24 @@ export function ARWalkScreen() {
     clearPlacingTimer();
     setPlacementStatus(status);
     if (status === 'placing') {
+      placingStartRef.current = Date.now();
+      // Fallback only: if onLoadEnd never arrives, don't leave "Placing…" stuck.
       placingTimerRef.current = setTimeout(() => {
         placingTimerRef.current = null;
-        setPlacementStatus('placed');
-      }, GAME_CONFIG.ar.placingFeedbackMs);
+        setPlacementStatus((s) => (s === 'placing' ? 'placed' : s));
+      }, GAME_CONFIG.ar.placingTimeoutMs);
     }
+  }
+
+  // The pet GLB finished loading and is actually on screen. Clear "Placing…" once
+  // the minimum feedback time has elapsed (so the state is never just a flash).
+  function handlePetLoaded() {
+    const remaining = Math.max(0, GAME_CONFIG.ar.placingFeedbackMs - (Date.now() - placingStartRef.current));
+    clearPlacingTimer();
+    placingTimerRef.current = setTimeout(() => {
+      placingTimerRef.current = null;
+      setPlacementStatus((s) => (s === 'placing' ? 'placed' : s));
+    }, remaining);
   }
 
   // PetARScene calls this on mount to hand us its placement trigger function.
@@ -271,10 +288,17 @@ export function ARWalkScreen() {
           initialScene={{ scene: PetARScene }}
           autofocus={placementStatus !== 'placed'}
           shadowsEnabled={false}
+          // HDR tone-mapping + bloom post-process passes crash inside Samsung's
+          // GLESv2 driver (SIGSEGV in VROToneMappingRenderPass → GL_DrawArrays) when
+          // lit geometry is rendered, i.e. on pet placement. Disabling them avoids
+          // the post-process blit entirely; the placeholder pet doesn't need HDR.
+          hdrEnabled={false}
+          bloomEnabled={false}
           depthEnabled={GAME_CONFIG.ar.depthEnabled}
           viroAppProps={{
             onMarkerFound: handleMarkerFound,
             onPlacementStateChanged: handlePlacementStateChanged,
+            onPetLoaded: handlePetLoaded,
             registerTapHandler,
             registerSceneUpdate,
             initialSpecies: species,
@@ -309,8 +333,11 @@ export function ARWalkScreen() {
         />
       )}
 
-      {/* Scanning ring — shown while scanning or ready; hidden once user has tapped */}
-      {arActive && (placementStatus === 'scanning' || placementStatus === 'ready') && <ScanningRing />}
+      {/* Scanning ring — shown while scanning, ready, or loading the pet */}
+      {arActive &&
+        (placementStatus === 'scanning' ||
+          placementStatus === 'ready' ||
+          placementStatus === 'placing') && <ScanningRing />}
 
       {/* Placement hint — shown while AR is active */}
       {arActive && (

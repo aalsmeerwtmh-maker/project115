@@ -100,8 +100,10 @@ export interface ARConfig {
   };
   /** Minimum depth-confidence (0–1) when depth data is present; results below this are skipped. */
   minDepthConfidence: number;
-  /** Milliseconds to show the "Placing…" state before transitioning to "placed". */
+  /** Minimum milliseconds to show the "Placing…" state (so it doesn't flash by). */
   placingFeedbackMs: number;
+  /** Fallback ms to leave "Placing…" if the model's onLoadEnd never fires. */
+  placingTimeoutMs: number;
   /** Horizontal distance (m) beyond which the pet starts walking toward the user. */
   petFollowDistanceM: number;
   /** Horizontal distance (m) within which the pet stops following and resumes its mood. */
@@ -336,6 +338,7 @@ export const GAME_CONFIG: GameConfig = {
     },
     minDepthConfidence: 0.3,
     placingFeedbackMs: 700,
+    placingTimeoutMs: 10000,
     petFollowDistanceM: 2.0,
     petArriveDistanceM: 0.5,
     petWalkStepM: 0.025,

@@ -54,8 +54,14 @@ export interface WalkEvents {
 }
 
 export interface WalkBossFightConfig {
-  stepTrigger: number;
-  timeTriggerSecs: number;
+  /** Boss-trigger thresholds scale linearly with the pet's growthValue:
+   *  growthValue 0 → (Min, Min), growthValue ≥ triggerMaxDifficultyGrowth → (Max, Max). */
+  stepTriggerMin: number;
+  stepTriggerMax: number;
+  timeTriggerSecsMin: number;
+  timeTriggerSecsMax: number;
+  /** growthValue at which the trigger thresholds reach their Max (harder) values. */
+  triggerMaxDifficultyGrowth: number;
   petHpPerStamina: number;
   petDmgMin: number;
   petDmgMax: number;
@@ -112,6 +118,8 @@ export interface ARConfig {
   petWalkStepM: number;
   /** Milliseconds between each step tick while the pet is following the user. */
   petWalkStepIntervalMs: number;
+  /** Uniform AR render scale per growth stage (models are authored at one base size). */
+  petScaleByStage: Record<'baby' | 'child' | 'adult' | 'elder', number>;
 }
 
 export interface GameConfig {
@@ -146,8 +154,13 @@ export const GAME_CONFIG: GameConfig = {
   ],
 
   walkBossFight: {
-    stepTrigger: 200,
-    timeTriggerSecs: 300,
+    // Trigger cadence gets harder with age: 200 steps / 5 min when newborn,
+    // scaling linearly to 500 steps / 30 min once the pet reaches elder (growth 75).
+    stepTriggerMin: 200,
+    stepTriggerMax: 500,
+    timeTriggerSecsMin: 300,
+    timeTriggerSecsMax: 1800,
+    triggerMaxDifficultyGrowth: 75,
     petHpPerStamina: 100,
     // petDmgMin is the floor DMG regardless of affection (aff 0–20 all deal this).
     // Only affection 100 reaches petDmgMax, which slightly exceeds bossHpBase → 1-shot.
@@ -343,6 +356,8 @@ export const GAME_CONFIG: GameConfig = {
     petArriveDistanceM: 0.5,
     petWalkStepM: 0.025,
     petWalkStepIntervalMs: 50,
+    // adult = 1.0 (the authored base size); baby is a small newborn.
+    petScaleByStage: { baby: 0.4, child: 0.7, adult: 1.0, elder: 1.15 },
   },
 
   petGrowth: {

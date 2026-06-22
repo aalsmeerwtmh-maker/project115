@@ -42,9 +42,10 @@ type ViroAppProps = {
   onPlacementStateChanged?: (status: PlacementStatus) => void;
   onPetLoaded?: () => void;
   registerTapHandler?: (fn: () => void) => void;
-  registerSceneUpdate?: (fn: (species: string, mood: DisplayMood) => void) => void;
+  registerSceneUpdate?: (fn: (species: string, mood: DisplayMood, scale: number) => void) => void;
   initialSpecies?: string;
   initialMood?: DisplayMood;
+  initialScale?: number;
 };
 
 type PetARSceneProps = {
@@ -74,13 +75,6 @@ const HIT_MAX: Record<string, number> = {
   EstimatedHorizontalPlane: GAME_CONFIG.ar.hitTestMaxDistances.estimatedHorizontalPlane,
   FeaturePoint:             GAME_CONFIG.ar.hitTestMaxDistances.featurePoint,
 };
-
-// Animated moods (walking, excited, happy) use their own GLBs which tend to be
-// smaller than the stand pose — keep them at 0.5 so they look natural.
-// Static moods (stand, sleep, eat) are scaled down to match the apparent size
-// of the animated frames.
-const PET_SCALE_ANIMATED: Vec3 = [0.5, 0.5, 0.5];
-const PET_SCALE_STATIC:   Vec3 = [0.006, 0.006, 0.006];
 
 // ---------------------------------------------------------------------------
 // Pure helpers
@@ -142,9 +136,11 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
   const cameraRef    = useRef<Vec3>([0, 0, 0]);
 
   // ---------- Species / mood (pushed from ARWalkScreen via callback) ----------
-  const { initialSpecies = 'dog', initialMood = 'normal' } = sceneNavigator.viroAppProps ?? {};
+  const { initialSpecies = 'dog', initialMood = 'normal', initialScale = 1 } = sceneNavigator.viroAppProps ?? {};
   const [species,  setSpecies]  = useState(initialSpecies);
   const [baseMood, setBaseMood] = useState<DisplayMood>(initialMood);
+  // Uniform render scale driven by the pet's growth stage (see GAME_CONFIG.ar).
+  const [petScale, setPetScale] = useState(initialScale);
 
   // ---------- Equipment (hat / suit) ----------
   const equipped = useEquipmentStore((s) => s.equipped);
@@ -154,9 +150,10 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
 
   // Register callback so ARWalkScreen can push updates into this scene.
   useEffect(() => {
-    sceneNavigator.viroAppProps?.registerSceneUpdate?.((sp, mood) => {
+    sceneNavigator.viroAppProps?.registerSceneUpdate?.((sp, mood, scale) => {
       setSpecies(sp);
       setBaseMood(mood);
+      setPetScale(scale);
     });
   // sceneNavigator is a stable Viro class ref — safe to omit.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -276,14 +273,17 @@ export function PetARScene({ sceneNavigator }: PetARSceneProps) {
       />
 
       {placement.status === 'placed' && (
-        <ViroNode position={petPos} rotation={[0, petYRot, 0]}>
+        <ViroNode
+          position={petPos}
+          rotation={[0, petYRot, 0]}
+          scale={[petScale, petScale, petScale]}
+        >
           {frames.map((src: Src, i: number) => (
             <Viro3DObject
               key={`${species}-${arMood}-${i}`}
               source={src}
               visible={i === arFrame}
               position={[0, 0, 0]}
-              scale={isStatic ? PET_SCALE_STATIC : PET_SCALE_ANIMATED}
               type="GLB"
               // Notify the screen when the first-shown frame is actually on screen so
               // the "Placing…" indicator clears only once the pet is really visible.

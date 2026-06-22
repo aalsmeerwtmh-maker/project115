@@ -28,6 +28,7 @@ import { spacing, radius } from '@/theme/spacing';
 import { typography } from '@/theme/typography';
 import { t } from '@/i18n/index';
 import { GAME_CONFIG } from '@/game/config';
+import { bossTriggerThresholds } from '@/game/bossFight';
 import { timeToGrowth, growthToStage } from '@/game/growthFormula';
 import { markBadgeAchieved } from '@/db/repositories/badges';
 import { getTotalStepCount } from '@/db/repositories/steps';
@@ -136,8 +137,10 @@ export function WalksScreen() {
   useEffect(() => {
     if (!isActive) return;
     const cfg = GAME_CONFIG.walkBossFight;
-    const stepTier = Math.floor(currentSteps / cfg.stepTrigger);
-    const timeTier = Math.floor(elapsedSeconds / cfg.timeTriggerSecs);
+    // Trigger cadence scales with the pet's age (older = harder / less frequent).
+    const { steps: stepTrigger, secs: timeTriggerSecs } = bossTriggerThresholds(activePet?.growthValue ?? 0);
+    const stepTier = Math.floor(currentSteps / stepTrigger);
+    const timeTier = Math.floor(elapsedSeconds / timeTriggerSecs);
 
     // While a boss fight is in progress, silently advance the tier refs so that finishing
     // the fight never immediately re-triggers the boss due to accumulated time/steps.
@@ -177,7 +180,7 @@ export function WalksScreen() {
       const dialogue = dialogues[Math.floor(Math.random() * dialogues.length)] ?? dialogues[0] ?? '';
       setWalkEventDialogue(dialogue);
     }
-  }, [currentSteps, elapsedSeconds, isActive, bossVisible]);
+  }, [currentSteps, elapsedSeconds, isActive, bossVisible, activePet?.growthValue]);
 
   async function applyWalkGrowth(stats: WalkSessionStats) {
     const pet = activePet;

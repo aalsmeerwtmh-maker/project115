@@ -104,16 +104,18 @@ export function ARWalkScreen() {
     if (feedActive) return 'eating';
     return resolveDisplayMood(activePet.mood, arHour);
   }, [activePet, feedActive, arHour]);
+  // Uniform render scale from the pet's growth stage (older = bigger).
+  const petScale = GAME_CONFIG.ar.petScaleByStage[activePet?.stage ?? 'baby'];
 
   // Ref to the scene's update callback — filled by registerSceneUpdate below.
-  const updateSceneRef = useRef<((species: string, mood: DisplayMood) => void) | null>(null);
-  function registerSceneUpdate(fn: (sp: string, mood: DisplayMood) => void) {
+  const updateSceneRef = useRef<((species: string, mood: DisplayMood, scale: number) => void) | null>(null);
+  function registerSceneUpdate(fn: (sp: string, mood: DisplayMood, scale: number) => void) {
     updateSceneRef.current = fn;
   }
-  // Push species/mood changes into the live scene whenever they change.
+  // Push species/mood/scale changes into the live scene whenever they change.
   useEffect(() => {
-    updateSceneRef.current?.(species, displayMood);
-  }, [species, displayMood]);
+    updateSceneRef.current?.(species, displayMood, petScale);
+  }, [species, displayMood, petScale]);
 
   // Whether the ViroARSceneNavigator is currently mounted.
   const [arActive, setArActive] = useState(true);
@@ -303,6 +305,7 @@ export function ARWalkScreen() {
             registerSceneUpdate,
             initialSpecies: species,
             initialMood: displayMood,
+            initialScale: petScale,
           }}
         />
       )}

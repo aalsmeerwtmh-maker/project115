@@ -1,5 +1,19 @@
 import { GAME_CONFIG } from './config';
 
+/**
+ * Boss auto-trigger thresholds for a pet of the given growthValue. Both the step
+ * and time cadence scale linearly with age: easiest (Min) at growthValue 0,
+ * hardest (Max) once growthValue reaches triggerMaxDifficultyGrowth.
+ */
+export function bossTriggerThresholds(growthValue: number): { steps: number; secs: number } {
+  const cfg = GAME_CONFIG.walkBossFight;
+  const t = Math.max(0, Math.min(growthValue / cfg.triggerMaxDifficultyGrowth, 1));
+  return {
+    steps: Math.round(cfg.stepTriggerMin + (cfg.stepTriggerMax - cfg.stepTriggerMin) * t),
+    secs: Math.round(cfg.timeTriggerSecsMin + (cfg.timeTriggerSecsMax - cfg.timeTriggerSecsMin) * t),
+  };
+}
+
 export function calcPetHp(stamina: number): number {
   return Math.max(stamina, 20) * GAME_CONFIG.walkBossFight.petHpPerStamina;
 }

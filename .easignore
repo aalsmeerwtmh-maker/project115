@@ -1,0 +1,30 @@
+# Dependencies & VCS history — not needed for the build (huge)
+node_modules/
+.git/
+
+# Raw 3D source material (Meshy exports). The build uses assets/ar/models/ only.
+ui/
+
+# Leftover build outputs (never build inputs). Note: do NOT glob *.jar —
+# android/gradle/wrapper/gradle-wrapper.jar is required.
+*.apk
+*.aab
+*.apks
+bundletool.jar
+
+# Local exports / scratch
+transcript/
+
+# Native build caches — EAS regenerates these
+android/build/
+android/app/build/
+android/.gradle/
+android/.cxx/
+android/app/.cxx/
+ios/Pods/
+ios/build/
+
+# Expo/Metro caches
+.expo/
+dist/
+web-build/

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Text, FlatList, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { usePetStore } from '@/stores/petStore';
@@ -40,23 +40,13 @@ const EMPTY_MODAL: ModalState = {
 };
 
 export function BossScreen() {
-  const activePet = usePetStore((s) => s.activePet);
+  const activePet     = usePetStore((s) => s.activePet);
   const streakCurrent = useProgressStore((s) => s.streakCurrent);
-  const addTokens = useProgressStore((s) => s.addTokens);
+  const addTokens     = useProgressStore((s) => s.addTokens);
 
   const [bossEvents, setBossEvents] = useState<Event[]>([]);
   const [modal, setModal] = useState<ModalState>(EMPTY_MODAL);
   const [challengingId, setChallengingId] = useState<string | null>(null);
-  const [nowMs, setNowMs] = useState<number>(() => Date.now());
-  const clockRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Refresh the "current time" every 30 seconds so cooldown countdowns stay accurate.
-  useEffect(() => {
-    clockRef.current = setInterval(() => setNowMs(Date.now()), 30_000);
-    return () => {
-      if (clockRef.current) clearInterval(clockRef.current);
-    };
-  }, []);
 
   const [bossLoadError, setBossLoadError] = useState(false);
 
@@ -87,16 +77,6 @@ export function BossScreen() {
     });
   }
 
-  function getRetryUntil(bossId: string): number | null {
-    const lossRow = bossEvents.find((e) => {
-      const p = JSON.parse(e.payload) as BossPayload;
-      return p.bossId === bossId && e.resolved === false;
-    });
-    if (!lossRow) return null;
-    const p = JSON.parse(lossRow.payload) as BossPayload;
-    return p.retryUntil ?? null;
-  }
-
   async function handleChallenge(boss: BossDefinition): Promise<void> {
     if (!activePet) return;
     setChallengingId(boss.id);
@@ -109,9 +89,6 @@ export function BossScreen() {
         bossId: boss.id,
         won: result.won,
         tokensEarned: result.tokensEarned,
-        ...(!result.won && {
-          retryUntil: Date.now() + boss.retryBlockHours * 3_600_000,
-        }),
         petSnapshot: {
           stamina: activePet.stamina,
           growthValue: activePet.growthValue,
@@ -189,11 +166,7 @@ export function BossScreen() {
             pet={activePet}
             streakDays={streakCurrent}
             defeated={isDefeated(boss.id)}
-            retryUntilMs={getRetryUntil(boss.id)}
-            nowMs={nowMs}
-            onChallenge={() => {
-              handleChallenge(boss);
-            }}
+            onChallenge={() => { handleChallenge(boss); }}
             loading={challengingId === boss.id}
           />
         )}

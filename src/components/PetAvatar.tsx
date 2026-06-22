@@ -225,22 +225,23 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
   }, [mood]);
 
   return (
-    <View
-      style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}
-      accessibilityLabel={`${name} the ${species}, feeling ${mood}`}
-    >
-      <Animated.View style={animatedStyle}>
-        {imageSource ? (
-          <Image
-            source={imageSource}
-            style={{ width: imageSize, height: imageSize }}
-            resizeMode="contain"
-            accessibilityIgnoresInvertColors
-          />
-        ) : (
-          <Text style={{ fontSize: imageSize * 0.55 }}>🐾</Text>
-        )}
-      </Animated.View>
+    <View style={styles.wrapper} accessibilityLabel={`${name} the ${species}, feeling ${mood}`}>
+      <View
+        style={[styles.container, { width: size, height: size, borderRadius: size / 2 }]}
+      >
+        <Animated.View style={animatedStyle}>
+          {imageSource ? (
+            <Image
+              source={imageSource}
+              style={{ width: imageSize, height: imageSize }}
+              resizeMode="contain"
+              accessibilityIgnoresInvertColors
+            />
+          ) : (
+            <Text style={{ fontSize: imageSize * 0.55 }}>🐾</Text>
+          )}
+        </Animated.View>
+      </View>
       <Text style={styles.name} numberOfLines={1} allowFontScaling>
         {name}
       </Text>
@@ -249,6 +250,9 @@ export function PetAvatar({ species, name, mood = 'normal', size = 120 }: PetAva
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    alignItems: 'center',
+  },
   container: {
     backgroundColor: colors.surfaceAlt,
     borderWidth: 3,
@@ -260,6 +264,6 @@ const styles = StyleSheet.create({
   name: {
     ...typography.captionBold,
     color: colors.textSecondary,
-    marginTop: 2,
+    marginTop: 4,
   },
 });

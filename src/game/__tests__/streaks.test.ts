@@ -1,17 +1,17 @@
 import { computeStreak } from '../streaks';
 
-// Helpers to produce date strings relative to today in UTC.
-function utcDateString(date: Date): string {
-  const year = date.getUTCFullYear();
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(date.getUTCDate()).padStart(2, '0');
+// Helpers to produce date strings relative to today in local time.
+function localDateString(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
 function addDays(n: number): string {
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() + n);
-  return utcDateString(d);
+  d.setDate(d.getDate() + n);
+  return localDateString(d);
 }
 
 const today = addDays(0);

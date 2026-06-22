@@ -68,6 +68,12 @@ export interface WalkBossFightConfig {
   rewardPerFight: number;
   /** Fraction of base damage applied as ±random variance each hit (0.25 = ±25%). */
   dmgVarianceFraction: number;
+  /** Max number of manual boss fights allowed per calendar day. */
+  manualDailyLimit: number;
+  /** Cooldown (ms) between manual boss fights. */
+  manualCooldownMs: number;
+  /** Minimum steps required alongside the time threshold for the first boss trigger. */
+  firstTriggerTimeMinSteps: number;
 }
 
 export interface BadgeDef {
@@ -156,6 +162,9 @@ export const GAME_CONFIG: GameConfig = {
     rewardBase: 20,
     rewardPerFight: 10,
     dmgVarianceFraction: 0.25,
+    manualDailyLimit: 5,
+    manualCooldownMs: 10 * 60 * 1000,
+    firstTriggerTimeMinSteps: 10,
   },
 
   tokenEarnRates: {

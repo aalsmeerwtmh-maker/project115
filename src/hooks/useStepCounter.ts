@@ -4,10 +4,42 @@ import { Accelerometer } from 'expo-sensors';
 import type { AccelerometerMeasurement } from 'expo-sensors/build/Accelerometer';
 import { useStepStore } from '@/stores/stepStore';
 import { useProgressStore } from '@/stores/progressStore';
+import { usePetStore } from '@/stores/petStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { upsertStepDay } from '@/db/repositories/steps';
-import { computeDailyGrowth } from '@/game/growthFormula';
+import { getProgress, setProgress } from '@/db/repositories/progress';
+import { computeDailyGrowth, growthToStage } from '@/game/growthFormula';
 import type { StepDay } from '@/db/schema';
+
+// Progress key tracking how much step-based growth has already been credited to
+// the pet today, so accumulating step counts during the day are not double-counted.
+const STEP_GROWTH_CREDITED_KEY = 'step_growth_credited';
+
+/**
+ * Credits the delta between today's total step-growth and what has already been
+ * applied to the pet today. Pet growth comes from BOTH walk time (see WalksScreen)
+ * and daily steps (here); this handles the steps portion.
+ */
+async function creditStepGrowth(date: string, todayTotalGrowth: number): Promise<void> {
+  const marker = await getProgress<{ date: string; credited: number }>(STEP_GROWTH_CREDITED_KEY);
+  const credited = marker && marker.date === date ? marker.credited : 0;
+  const delta = todayTotalGrowth - credited;
+
+  if (delta <= 0.001) {
+    // Nothing new to credit; just make sure the marker reflects today.
+    if (!marker || marker.date !== date) {
+      await setProgress(STEP_GROWTH_CREDITED_KEY, { date, credited: todayTotalGrowth });
+    }
+    return;
+  }
+
+  const pet = usePetStore.getState().activePet;
+  if (!pet) return;
+  const newGrowth = Math.round(((pet.growthValue ?? 0) + delta) * 100) / 100;
+  const newStage = growthToStage(newGrowth);
+  await usePetStore.getState().updateActivePet({ growthValue: newGrowth, stage: newStage });
+  await setProgress(STEP_GROWTH_CREDITED_KEY, { date, credited: todayTotalGrowth });
+}
 
 // Anti-cheat: ignore a pedometer delta if it would imply more than this many
 // steps per minute since the last update.
@@ -75,6 +107,8 @@ export function useStepCounter() {
     });
     todayRowRef.current = row;
     setToday(row);
+    // Apply the steps portion of pet growth (idempotent within the day).
+    await creditStepGrowth(date, growth.growthValue);
   }, [setToday]);
 
   useEffect(() => {

@@ -7,7 +7,7 @@ import {
   insertStoryEvent,
 } from '@/db/repositories/events';
 import { generateId } from '@/utils/id';
-import { checkinTokenAmount, timeInAppTokenAmount, TIME_IN_APP_DAILY_CAP } from '@/game/tokens';
+import { checkinTokenAmount } from '@/game/tokens';
 import { GAME_CONFIG } from '@/game/config';
 
 function haversineM(a: Coords, b: Coords): number {
@@ -84,7 +84,7 @@ export interface UseWalkSessionOptions {
 export function useWalkSession(options?: UseWalkSessionOptions): UseWalkSessionReturn {
   const { startTracking, stopTracking, permissionStatus } = useLocation();
   const addTokens = useProgressStore((s) => s.addTokens);
-  const timeInAppTokensToday = useProgressStore((s) => s.timeInAppTokensToday);
+  const awardTimeInAppToken = useProgressStore((s) => s.awardTimeInAppToken);
 
   const [isActive, setIsActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -107,13 +107,6 @@ export function useWalkSession(options?: UseWalkSessionOptions): UseWalkSessionR
     onNewCellRef.current = options?.onNewCell;
     onWalkEventRef.current = options?.onWalkEvent;
   });
-
-  // Keep a ref to the current daily token count so the minute timer callback
-  // always sees the up-to-date value without needing it in the dependency array.
-  const timeInAppTodayRef = useRef<number>(timeInAppTokensToday);
-  useEffect(() => {
-    timeInAppTodayRef.current = timeInAppTokensToday;
-  }, [timeInAppTokensToday]);
 
   const handleNewCoords = useCallback(
     async (coords: Coords) => {
@@ -155,20 +148,12 @@ export function useWalkSession(options?: UseWalkSessionOptions): UseWalkSessionR
         setElapsedSeconds(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
 
-      // Award 1 token per minute of active walk session, capped at TIME_IN_APP_DAILY_CAP.
+      // Award 1 token per minute of active walk session. The store enforces the
+      // daily cap and persists both the token balance and the daily counter.
       minuteTimerRef.current = setInterval(() => {
-        if (timeInAppTodayRef.current < TIME_IN_APP_DAILY_CAP) {
-          const amount = timeInAppTokenAmount();
-          timeInAppTodayRef.current += amount;
-          // Fire-and-forget: addTokens also persists timeInAppTokensToday via store
-          addTokens(amount).catch((err) => {
-            console.warn('[useWalkSession] time-in-app token award failed:', err);
-          });
-          // Update the persisted daily total through the store
-          useProgressStore.setState((prev) => ({
-            timeInAppTokensToday: prev.timeInAppTokensToday + amount,
-          }));
-        }
+        awardTimeInAppToken().catch((err) => {
+          console.warn('[useWalkSession] time-in-app token award failed:', err);
+        });
       }, 60_000);
 
       // Fire a random walk event every intervalMinutes minutes.
@@ -189,7 +174,7 @@ export function useWalkSession(options?: UseWalkSessionOptions): UseWalkSessionR
 
       await startTracking(handleNewCoords);
     },
-    [startTracking, handleNewCoords, addTokens],
+    [startTracking, handleNewCoords, awardTimeInAppToken],
   );
 
   const stop = useCallback(

@@ -35,21 +35,11 @@ function buildRequirements(boss: BossDefinition, pet: Pet, streakDays: number): 
   ];
 }
 
-function buildCooldownLabel(retryUntilMs: number, nowMs: number): string {
-  const remainMs = Math.max(0, retryUntilMs - nowMs);
-  const totalMinutes = Math.floor(remainMs / 60_000);
-  const h = Math.floor(totalMinutes / 60);
-  const m = totalMinutes % 60;
-  return t.boss.retryCountdown(h, m);
-}
-
 interface BossCardProps {
   boss: BossDefinition;
   pet: Pet;
   streakDays: number;
   defeated: boolean;
-  retryUntilMs: number | null; // null = no active cooldown
-  nowMs: number; // current timestamp, supplied by parent to keep this component pure
   onChallenge: () => void;
   loading?: boolean;
 }
@@ -59,15 +49,12 @@ export function BossCard({
   pet,
   streakDays,
   defeated,
-  retryUntilMs,
-  nowMs,
   onChallenge,
   loading = false,
 }: BossCardProps) {
   const requirements = buildRequirements(boss, pet, streakDays);
   const eligible = canChallengeBoss(boss, pet, streakDays);
-  const inCooldown = retryUntilMs !== null && retryUntilMs > nowMs;
-  const challengeDisabled = !eligible || defeated || inCooldown || loading;
+  const challengeDisabled = !eligible || defeated || loading;
 
   return (
     <View style={styles.card}>
@@ -94,10 +81,6 @@ export function BossCard({
       {defeated ? (
         <View style={styles.defeatedBadge}>
           <Text style={styles.defeatedText}>{t.boss.defeatedBadge}</Text>
-        </View>
-      ) : inCooldown ? (
-        <View style={styles.cooldownBadge}>
-          <Text style={styles.cooldownText}>{buildCooldownLabel(retryUntilMs!, nowMs)}</Text>
         </View>
       ) : (
         <PrimaryButton
@@ -169,17 +152,5 @@ const styles = StyleSheet.create({
   defeatedText: {
     ...typography.bodyBold,
     color: colors.surface,
-  },
-  cooldownBadge: {
-    backgroundColor: colors.surfaceAlt,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  cooldownText: {
-    ...typography.label,
-    color: colors.textSecondary,
   },
 });

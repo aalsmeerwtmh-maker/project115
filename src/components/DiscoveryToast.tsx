@@ -23,6 +23,7 @@ const SLIDE_IN_MS = 300;
 const VISIBLE_MS = 3000;
 const SLIDE_OUT_MS = 300;
 const TOAST_HEIGHT = 56;
+const HIDDEN_Y = -(TOAST_HEIGHT + spacing.lg + 8); // exceeds top offset so bottom edge is fully off-screen
 
 /**
  * Reanimated slide-in banner from top.
@@ -30,7 +31,7 @@ const TOAST_HEIGHT = 56;
  * Calls `hapticSelection` when it first appears.
  */
 export function DiscoveryToast({ visible, tokensAwarded, onDismiss }: DiscoveryToastProps) {
-  const translateY = useSharedValue(-TOAST_HEIGHT - 20);
+  const translateY = useSharedValue(HIDDEN_Y);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }],
@@ -48,7 +49,7 @@ export function DiscoveryToast({ visible, tokensAwarded, onDismiss }: DiscoveryT
       // Slide back out after VISIBLE_MS and call onDismiss.
       translateY.value = withDelay(
         VISIBLE_MS,
-        withTiming(-TOAST_HEIGHT - 20, {
+        withTiming(HIDDEN_Y, {
           duration: SLIDE_OUT_MS,
           easing: Easing.in(Easing.ease),
         }),
@@ -60,7 +61,7 @@ export function DiscoveryToast({ visible, tokensAwarded, onDismiss }: DiscoveryT
 
       return () => clearTimeout(timer);
     } else {
-      translateY.value = -TOAST_HEIGHT - 20;
+      translateY.value = HIDDEN_Y;
     }
     /* eslint-enable react-hooks/immutability */
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -30,11 +30,11 @@ import { BadgeCelebrationModal } from '@/components/BadgeCelebrationModal';
 
 type HomeNav = NativeStackNavigationProp<RootStackParamList>;
 
-function todayUtcString(): string {
+function todayLocalString(): string {
   const d = new Date();
-  const year = d.getUTCFullYear();
-  const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 }
 
@@ -127,7 +127,7 @@ export function HomeScreen() {
         ]);
         setRenameCount(savedRenameCount ?? 0);
 
-        const todayStr = todayUtcString();
+        const todayStr = todayLocalString();
         if (lastDate !== todayStr) {
           const newStreak = computeStreak(lastDate, streakCurrent);
           const isMilestone = isStreakMilestone(newStreak);
@@ -149,7 +149,7 @@ export function HomeScreen() {
     try {
       await setStreakCurrent(pendingStreak);
       await addTokens(pendingTokens);
-      await setLastCheckinDate(todayUtcString());
+      await setLastCheckinDate(todayLocalString());
       if (isStreakMilestone(pendingStreak)) {
         hapticSuccess();
       } else {

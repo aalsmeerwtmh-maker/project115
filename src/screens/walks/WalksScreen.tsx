@@ -59,7 +59,10 @@ export function WalksScreen() {
   const liveSteps = today?.stepCount ?? 0;
   const activePet       = usePetStore((s) => s.activePet);
   const updateActivePet = usePetStore((s) => s.updateActivePet);
-  const addTokens       = useProgressStore((s) => s.addTokens);
+  const addTokens             = useProgressStore((s) => s.addTokens);
+  const manualBossCountToday  = useProgressStore((s) => s.manualBossCountToday);
+  const manualBossLastAt      = useProgressStore((s) => s.manualBossLastAt);
+  const recordManualBossFight = useProgressStore((s) => s.recordManualBossFight);
 
   const [pastWalks, setPastWalks] = useState<Event[]>([]);
   const [isStopping, setIsStopping] = useState(false);
@@ -68,6 +71,7 @@ export function WalksScreen() {
   const [toastTokens, setToastTokens] = useState(0);
   const [walkEventDialogue, setWalkEventDialogue] = useState<string | null>(null);
   const [bossVisible, setBossVisible] = useState(false);
+  const [systemBossTriggered, setSystemBossTriggered] = useState(false);
   const [fightCount, setFightCount]   = useState(0);
   const [stageUpStage, setStageUpStage] = useState<'child' | 'adult' | 'elder' | null>(null);
   const [earnedBadge, setEarnedBadge] = useState<{ def: BadgeDef; achievedAt: number } | null>(null);
@@ -117,6 +121,8 @@ export function WalksScreen() {
       void loadPastWalks();
       bossStepTierRef.current = 0;
       bossTimeTierRef.current = 0;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSystemBossTriggered(false);
     }
   }, [isActive, loadPastWalks]);
 
@@ -142,7 +148,16 @@ export function WalksScreen() {
     }
 
     let shouldTrigger = false;
-    if (stepTier > 0 && stepTier > bossStepTierRef.current) {
+    const isFirstTrigger = bossStepTierRef.current === 0 && bossTimeTierRef.current === 0;
+    if (isFirstTrigger) {
+      const bySteps = stepTier > 0;
+      const byTime = timeTier > 0 && currentSteps >= cfg.firstTriggerTimeMinSteps;
+      if (bySteps || byTime) {
+        bossStepTierRef.current = stepTier;
+        bossTimeTierRef.current = timeTier;
+        shouldTrigger = true;
+      }
+    } else if (stepTier > 0 && stepTier > bossStepTierRef.current) {
       bossStepTierRef.current = stepTier;
       bossTimeTierRef.current = timeTier;
       shouldTrigger = true;
@@ -155,6 +170,7 @@ export function WalksScreen() {
 
     // Always show the "Something Happened" walk-event window before the boss.
     // Queue the boss; it fires in handleWalkEventDismiss after the player taps "Got it".
+    setSystemBossTriggered(true);
     pendingBossRef.current = true;
     if (walkEventRef.current === null) {
       const dialogues = GAME_CONFIG.walkEvents.dialogues;
@@ -233,7 +249,7 @@ export function WalksScreen() {
     setBossVisible(false);
   }
 
-  function handleShowBossChallenge() {
+  function handleShowBossChallenge(manual = false) {
     const pet = activePet;
     if (pet) {
       const newStamina = Math.max(20, pet.stamina - GAME_CONFIG.walkBossFight.bossStaminaCost);
@@ -241,6 +257,7 @@ export function WalksScreen() {
         void updateActivePet({ stamina: newStamina });
       }
     }
+    if (manual) void recordManualBossFight();
     setBossVisible(true);
   }
 
@@ -259,6 +276,11 @@ export function WalksScreen() {
   function handleExplorationMap() {
     navigation.navigate('ExplorationMap');
   }
+
+  const { manualDailyLimit, manualCooldownMs } = GAME_CONFIG.walkBossFight;
+  const canManuallyChallenge =
+    manualBossCountToday < manualDailyLimit &&
+    (manualBossLastAt === 0 || Date.now() - manualBossLastAt >= manualCooldownMs);
 
   const mapRegion =
     polyline.length > 0
@@ -336,7 +358,8 @@ export function WalksScreen() {
             <View style={styles.arButtonWrapper}>
               <PrimaryButton
                 label={t.walkBoss.challengeBossButton}
-                onPress={handleShowBossChallenge}
+                onPress={() => handleShowBossChallenge(true)}
+                disabled={!systemBossTriggered || !canManuallyChallenge}
               />
             </View>
           )}
